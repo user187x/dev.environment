@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# $1 is the argument passed from tmux
+# We use 'unknown' if $1 is empty to prevent errors
+current_command=${1:-unknown}
+
+case "$current_command" in
+  "vim"|"nvim"|"vi"|"nano")
+    icon="📝 EDIT"
+    ;;
+  "ssh")
+    icon="☁️ SSH"
+    ;;
+  "python"|"python3")
+    icon="🐍 PY"
+    ;;
+  "git")
+    icon="🌱 GIT"
+    ;;
+  "zsh"|"bash"|"sh")
+    icon="💻 TERM"
+    ;;
+  *)
+    # FIX: Use 'tr' to uppercase, which works on ALL shells (dash/sh/bash)
+    upper_cmd=$(echo "$current_command" | tr '[:lower:]' '[:upper:]')
+    icon="⚡ $upper_cmd" 
+    ;;
+esac
+
+echo " $icon "
