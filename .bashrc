@@ -75,7 +75,7 @@ update_dynamic_prompt() {
  local NC="\[\e[0m\]"
 
  local PALETTE=("$RED" "$YELLOW" "$GREEN" "$CYAN" "$BLUE" "$MAGENTA")
- local idx=$(($(date +%S) % ${#PALETTE[@]}))
+ local idx=$(($(date +%-S) % ${#PALETTE[@]}))
  local COLOR="${PALETTE[$idx]}"
 
  if [[ "$EXIT_CODE" -eq 0 ]]; then
