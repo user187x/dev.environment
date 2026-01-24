@@ -6,3 +6,64 @@ function clipboard {
  echo -e "\e[3;90m -> File \e[1;92m$filename\e[0m \e[3;90mcontents copied to system clipboard\e[0m"
 }
 
+diff() {
+ grc diff "$@"
+}
+
+fz() {
+
+ local selected_file="$(fzf "$@")"
+ selected_file=$(printf "%q" "$selected_file")
+
+ if [[ -n "$selected_file" ]]; then
+
+  local tool=""
+  local extension="${selected_file##*.}"
+
+  if [[ "$extension" == "mp3" ]]; then
+   tool="mp3"
+  else
+   tool="Gedit"
+  fi
+
+  option=$(whiptail --title "Fuzzy Search" \
+   --menu "Choose an option:" 15 50 4 \
+   "1" "View File Contents" \
+   "2" "Edit with VIM" \
+   "3" "Open with system $tool app" \
+   "4" "Go To (directory)" \
+   "5" "Exit" \
+   3>&1 1>&2 2>&3)
+
+  if [ "$option" == "1" ]; then
+   bat "$selected_file"
+  elif [ "$option" == "2" ]; then
+   sudo vim "$selected_file"
+  elif [ "$option" == "3" ]; then
+   if [[ "$tool" =~ "mp3" ]]; then
+    echo "Listening to : $selected_file"
+    mpv --no-video $selected_file >/dev/null 2>&1
+   else
+    sudo gedit "$selected_file" >/dev/null 2>&1
+   fi
+  elif [ "$option" == "4" ]; then
+   echo
+   echo "Changing directory..."
+   if [[ -d "$selected_file" ]]; then
+    cd "$selected_file"
+   else
+    directory=$(dirname "$selected_file")
+    cd "$selected_file"
+   fi
+  else
+   return 0
+  fi
+  
+  if [[ "$option" == "4" ]]; then
+   echo -e "\e[3;90m At Directory: \e[3;92m$selected_file\e[0m"
+  else
+   echo -e "\e[3;90mSelected File: \e[3;92m$selected_file\e[0m"
+  fi
+
+ fi
+}

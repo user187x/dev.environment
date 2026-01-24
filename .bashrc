@@ -89,9 +89,9 @@ update_dynamic_prompt() {
 export PROMPT_COMMAND=update_dynamic_prompt
 
 # Setting Tmux as the default shell
-if [[ $- =~ i ]] && [[ -z "$TMUX" ]]; then
- exec tmux new-session -A -s default
-fi
+#if [[ $- =~ i ]] && [[ -z "$TMUX" ]]; then
+# exec tmux new-session -A -s default
+#fi
 
 # -----------------------------------------------------------
 # SOUND CONFIGURATION
@@ -215,30 +215,6 @@ function clean {
 
 export -f clean
 
-function tmux-status {
- echo "Hello"
-}
-
-export -f tmux-status
-
-function tmux-source {
-
- local tmux_conf="$HOME/.tmux.conf"
- local arg="$1"
-
- if [[ -f "$tmux_conf" ]]; then
-  touch "$tmux_conf"
- fi
-
- if [[ "$arg" == "-e" || "$arg" == "--edit" ]]; then
-  vim "$tmux_conf"
- else
-  tmux source-file ~/.tmux.conf
- fi
-}
-
-export -f tmux-source
-
 # Function to update & clean up after
 function update {
 
@@ -274,7 +250,7 @@ function ps {
 }
 
 #tag:fx,bash,shell,format
-function fmtbash {
+function format-bash {
 
  local input="$1"
  if [[ ! -e "$input" ]]; then
@@ -285,6 +261,8 @@ function fmtbash {
  shfmt -i 1 -w $input
  echo -e " \e[2;36mScript\e[0m \e[1;27m$input\e[0m \e[2;36mformatted!\e[0m"
 }
+
+export -f format-bash
 
 #tag:fx,json,text
 function prettyJson {

@@ -47,18 +47,39 @@ for tool in "${tools[@]}"; do
  if ! command -v "$tool" > /dev/null 2>&1; then
   echo "Installing $tool..."
   if ! sudo apt install "$tool" -y; then
-   echo -e "App [\e[1;92m$tool\e[0m] failed to install"
+   echo -e "Tool [\e[1;92m$tool\e[0m] failed to install"
    failed+=("$tool")
+  else
+   installed+=("$tool")
   fi
  else
-  echo -e "App [\e[1;92m$tool\e[0m] Installed"
+  echo -e "Tool [\e[1;92m$tool\e[0m] Installed"
   installed+=("$tool")
  fi
 done
 
-echo "Total Tools      : ${#tools[@]}"
-echo "Total Installed : ${#installed[@]}"
-echo "Total Failed    : ${#failed[@]}"
+echo -e "(i) Total Tools     : \e[1;94m${#tools[@]}\e[0m"
+echo -e "(i) Total Installed : \e[1;92m${#installed[@]}\e[0m"
+
+count="${#failed[@]}"
+
+if [[ "$count" -eq 0 ]]; then
+ msg="\e[1;92m$count\e[0m"
+else
+ msg="\e[1;91m$count\e[0m"
+fi
+
+echo -e "(i) Total Failed    : $msg"
+
+# Display missing tools (if any) to user
+if [[ "${#tools[@]}" -ne "${#installed[@]}" ]]; then
+ echo "Tools Missing :"
+ for tool in "${failed[@]}"; do
+  echo -e " [\e[1;92m$tool\e[0m]"
+ done
+else
+ echo -e "(i) \e[1;92mAll tools installed successfully!\e[0m"
+fi
 
 # Install ghostty terminal
 if ! command -v ghostty > /dev/null 2>&1; then
