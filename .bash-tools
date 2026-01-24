@@ -1,0 +1,127 @@
+#!/bin/bash
+
+tools=(
+ "tmux"
+ "vim"
+ "bat"
+ "curl"
+ "wget"
+ "openssl"
+ "btop"
+ "pluma"
+ "gedit"
+ "colordiff"
+ "tty-clock"
+ "openjdk-25-jdk"
+ "visualvm"
+ "lolcat"
+ "build-essential"
+ "net-tools"
+ "jq"
+ "libnotify-bin"
+ "yq"
+ "figlet"
+ "tree"
+ "whiptail"
+ "duf"
+ "fzf"
+ "delta"
+ "thefuck"
+ "shfmt"
+ "shellcheck"
+ "yamllint"
+ "neofetch"
+ "expect"
+ "libxml2-utils"
+ "jc"
+ "gufw"
+ "ranger"
+ "mc"
+ "cmatrix"
+)
+
+failed=()
+installed=()
+
+for tool in "${tools[@]}"; do
+ if ! command -v "$tool" > /dev/null 2>&1; then
+  echo "Installing $tool..."
+  if ! sudo apt install "$tool" -y; then
+   echo -e "App [\e[1;92m$tool\e[0m] failed to install"
+   failed+=("$tool")
+  fi
+ else
+  echo -e "App [\e[1;92m$tool\e[0m] Installed"
+  installed+=("$tool")
+ fi
+done
+
+echo "Total Tools      : ${#tools[@]}"
+echo "Total Installed : ${#installed[@]}"
+echo "Total Failed    : ${#failed[@]}"
+
+# Install ghostty terminal
+if ! command -v ghostty > /dev/null 2>&1; then
+ echo "Installing ghostty..."
+ curl -fsSL https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh | sh
+fi
+
+# Install Helm
+if ! command -v helm > /dev/null 2>&1; then
+ echo "Installing helm..."
+ curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4 | sh
+fi
+
+# Install Docker Desktop
+if ! command -v docker > /dev/null 2>&1; then
+ #TODO 
+ echo "Installing docker [false] :: TODO"
+fi
+
+# Install system monitor (task bar)
+if ! command -v indicator-multiload > /dev/null 2>&1; then
+ echo "Installing inidcator-multiload..."
+ sudo apt install indicator-multiload
+fi
+
+# Install tools for increasing toolbar size
+if ! command -v gnome-shell-extension-manager > /dev/null 2>&1; then
+ echo "Installing gnome-shell-extension-manager..."
+ sudo apt install gnome-shell-extension-manager
+fi 
+
+# Install desktop editor
+if ! command -v dconf-editor > /dev/null 2>&1; then
+ echo "Installing dconf-editor..."
+ sudo apt install dconf-editor
+fi
+
+# Install coder 
+if ! command -v code > /dev/null 2>&1; then
+ echo "Installing VsCode..."
+ curl -fsSL https://code-server.dev/install.sh | sh
+fi
+
+# Install Mission Center
+if ! command -v flatpak > /dev/null 2>&1; then
+ echo "Installing flatpak..."
+ sudo apt update && sudo apt install flatpak -y
+ flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+ 
+ echo "Installing MissionCenter..."
+ flatpak install flathub io.missioncenter.MissionCenter
+fi
+
+# Install LazyDocker (CLI Manager)
+if ! command -v lazydocker > /dev/null 2>&1; then
+ ech "Installing lazydocker..."
+ curl https://raw.githubusercontent.com/jesseduffield/lazydocker/master/scripts/install_update_linux.sh | bash
+fi
+
+# Start every window in the center
+centered=$(gsettings get org.gnome.mutter center-new-windows)
+
+if [[ "$centered" != "true" || "$centered" -ne 1 ]]; then
+ echo "Setting all windows to be centered!"
+ gsettings set org.gnome.mutter center-new-windows true
+fi

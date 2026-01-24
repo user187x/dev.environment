@@ -1,0 +1,8 @@
+#!/bin/bash
+
+function clipboard {
+ xclip -selection clipboard $1
+ filename=$(basename $1)
+ echo -e "\e[3;90m -> File \e[1;92m$filename\e[0m \e[3;90mcontents copied to system clipboard\e[0m"
+}
+
