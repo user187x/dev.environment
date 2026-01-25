@@ -1,0 +1,80 @@
+#!/bin/bash
+
+function install-font {
+
+ read -e -r -p "Enter nerdfont tar path : " path
+ while true; do
+
+  if ! [[ -f "$path" ]]; then
+   echo "Invalid path!"
+   read -e -r -p "Enter nerdfont tar path : " path
+
+   if [[ -f "$path" ]]; then
+    break
+   fi
+  fi
+ done
+
+ font_name=$(basename "$path")
+
+ mkdir -p "$HOME/.fonts" >2 >&1
+ tar -xf "$path" -C "$HOME/.fonts"
+
+ if [[ "$?" -ne 0 ]]; then
+  echo "Failed to install font"
+  exit
+ fi
+
+ echo "Rebuilding font cache..."
+ fc-cache -v
+
+ if [[ "$?" -eq 0 ]]; then
+  echo "Successfully installed font $font_name"
+ else
+  echo "Failed to install font $font_name"
+ fi
+}
+
+function tmux-fix {
+
+ offline_install="true"
+
+ # Define paths
+ TMUX_DIR="$HOME/.tmux"
+ CONF_FILE="$TMUX_DIR/tmux.conf"
+ TPM_DIR="$TMUX_DIR/plugins/tpm"
+
+ echo "--- 🛠️ Initializing Tmux ---"
+ echo
+ # This ensures we start with a clean state.
+ echo "Terminating Tmux server..."
+ echo
+ tmux kill-server 2>/dev/null
+ echo "✅ Tmux server killed."
+
+ # Ensure the Config directory exists
+ mkdir -p "$TMUX_DIR"
+
+ # Install Tmux Plugin Manager (TPM) if missing
+ if [ ! -d "$TPM_DIR" ]; then
+  if [[ "$offline_install" == "true" ]]; then
+   read -e -r -p "Enter path to tmux plugin manager : " tpm_src   
+   echo "⬇️  Installing TPM from local..."
+   mv "$tpm_src" "$TPM_DIR"
+  else
+   echo "⬇️  Installing TPM from remote..."
+   git clone https://github.com/tmux-plugins/tpm "$TPM_DIR"
+ else
+  echo "✅ TPM is already installed."
+ fi
+
+ # Install/Update Plugins Headless
+ # we force TPM to download and install plugins *before* Tmux starts.
+ echo "⬇️  Installing plugins (Dracula, etc)..."
+ "$TPM_DIR/bin/install_plugins" >/dev/null 2>&1
+
+ # We use -f to explicitly tell tmux where your config is,
+ # ensuring it loads correctly even if not in the default ~/.tmux.conf location.
+ echo "🚀 Starting Tmux..."
+ exec tmux -f "$CONF_FILE"
+}
