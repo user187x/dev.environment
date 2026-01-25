@@ -155,6 +155,15 @@ alias figfonts='showfigfonts'
 alias bat='batcat'
 alias tf='terraform'
 
+cnc_path="$HOME/Projects/dev.environment"
+
+if [[ -d "$cnc_path" ]]; then
+ alias denv="cd $HOME/Projects/dev.environment"
+else
+ echo "Settup your CNC project to initialize properly"
+ echo " -> System alias 'denv' must be set in your bashrc"
+fi
+
 # kubernetes alias
 alias k='kubectl'
 alias k9s='k9s --headless'

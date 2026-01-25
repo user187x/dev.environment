@@ -38,9 +38,10 @@ function install-font {
 function tmux-fix {
 
  offline_install="true"
+ echo "Initializing Tmux from dev.environment : $offline_install"
 
  # Define paths
- TMUX_DIR="$HOME/.tmux"
+ TMUX_DIR="$HOME/.config/tmux"
  CONF_FILE="$TMUX_DIR/tmux.conf"
  TPM_DIR="$TMUX_DIR/plugins/tpm"
 
@@ -56,14 +57,27 @@ function tmux-fix {
  mkdir -p "$TMUX_DIR"
 
  # Install Tmux Plugin Manager (TPM) if missing
- if [ ! -d "$TPM_DIR" ]; then
+ if [[ ! -d "$TPM_DIR" ]]; then
+
   if [[ "$offline_install" == "true" ]]; then
-   read -e -r -p "Enter path to tmux plugin manager : " tpm_src   
-   echo "⬇️  Installing TPM from local..."
-   mv "$tpm_src" "$TPM_DIR"
+   
+   read -e -r -p "Enter path to Tmux Plugin Manager (TPM) : " SCR_PATH   
+   echo "⬇️  Copying TPM from local..."
+
+   cp -rf "$SRC_PATH" "$TPM_DIR"
+
+   # Check that (any) files exist in the directory
+   file_count=$(find "$TPM_DIR" -maxdepth 1 -type f | wc -l)
+
+   if [[ "$file_count" -eq 0 ]]; then
+    echo "Failure copying files to temp directory: $TMP_DIR"
+    exit 1
+   fi
+
   else
    echo "⬇️  Installing TPM from remote..."
    git clone https://github.com/tmux-plugins/tpm "$TPM_DIR"
+  fi
  else
   echo "✅ TPM is already installed."
  fi
@@ -77,4 +91,114 @@ function tmux-fix {
  # ensuring it loads correctly even if not in the default ~/.tmux.conf location.
  echo "🚀 Starting Tmux..."
  exec tmux -f "$CONF_FILE"
+}
+
+function initialize {
+
+ # Define paths
+ TMUX_DIR="$HOME/.config/tmux"
+
+ CONF_FILE="$TMUX_DIR/tmux.conf"
+ TPM_DIR="$TMUX_DIR/plugins/tpm"
+ 
+ echo "Initializing dev environement..."
+
+ read -p "Continue? (y/n) " : answer
+ if [[ "$answer" -ne "y" ]]; then
+  echo "Terminating..."
+  exit 0
+ fi
+
+ if [[ -L "$HOME/.bashrc" ]]; then
+  echo "dev-environement bashrc already linked"
+ else
+  local backup_path="$HOME/env-backup.tar"
+
+  # Backup original
+  echo "Backing up existing ~/.bashrc to ~/bashrc-backup.tar"
+  tar -cf "$backup_path" "$HOME/.bashrc"
+
+  # Remove the existing
+  echo "Replacing existing bashrc with dev environment version"
+  rm "$HOME/.bashrc"
+
+  if [[ ! -e "$HOME/.bashrc" ]]; then
+   echo "Failure removing existing bashrc. Terminating action..."
+   exit
+  fi
+
+  # link the dev bashrc to ~/.bashrc
+  ln -s "$PWD/.bashrc" "$HOME/.bashrc"
+
+  if [[ -f "$HOME/.bashrc" ]]; then
+   echo "Update of bashrc complete!"
+  else
+   echo "Failure occured while updating bashrc. Rolling back changes"
+   tar -xf "$backup_path" -C "$HOME/"
+   exit 1
+  fi
+ fi
+
+ possible_paths=("$HOME/.config/tmux" "$HOME/.tmux" "$HOME/.tmux.conf")
+ total_possible="${#possible_paths[@]}"
+
+ check_counter=0
+ for possible in "${possible_paths[@]}"; do
+
+  # if it exists back it up
+  if [[ -e "$possible" ]]; then
+   echo "Backing up existing files: $possible"
+   tar -uf "$backup_path" "$possible" >/dev/null 2>&1
+
+   if tar -tf archive.tar "$possible" >/dev/null 2>&1; then
+    echo "File backed-up: $possible"
+
+    # Removing old tmux directory
+    echo "Removing backed-up resource: $possible"
+    read -p "Proceed ? (y/n) : " response
+
+    if [[ "$response" != "y" ]]; then
+     echo "Termenating..."
+     exit 0
+    fi
+
+    # Remove the entry
+    rm -rf "$possible" >/dev/null 2>&1
+
+    # Check that it was removed
+    if [[ -e "$possible" ]]; then
+     echo "Failure removing old tmux directory: $possible"
+     exit 1
+    else
+     echo "Removing old tmux directories"
+    fi
+
+    # Keep track of how many we checked
+    ((check_counter++))
+   else
+    echo "Failure backing up original files. Terminating action..."
+    exit 1
+   fi
+  fi
+ done
+
+ # assert directories exists
+ mkdir -p "$HOME/.config/tmux" >/dev/null 2>&1
+
+ # Copying dev-evnironment files to local system directories
+ cp -rf "$PWD/.config/tmux" "$HOME/.config/tmux"
+
+ # assert files exist
+ if [[ ! -d "$HOME/.config/tmux" ]]; then
+  echo "Failure asserting directory exists: $HOME/.config/tmux"
+  exit 1
+ else
+  echo "Successfully copied all dev-environment files for tmux"
+ fi
+ 
+ echo "Asserting tmux configuration files and settings"
+ if ! tmux-fix; then 
+  echo "Failed initializing..."
+  exit 1
+ fi
 }
