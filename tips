@@ -1,0 +1,114 @@
+#!/bin/bash
+
+# Global filter variable passed from the command line argument
+FILTER="$1"
+
+_formalize() {
+ # Initialize variables
+ local app=""
+ local synopsis=""
+ local cmd_str=""
+ local explanations=()
+
+ # Process arguments
+ while [[ "$#" -gt 0 ]]; do
+  case $1 in
+  --app)
+   app="$2"
+   shift
+   ;;
+  --synopsis)
+   synopsis="$2"
+   shift
+   ;;
+  --command)
+   cmd_str="$2"
+   shift
+   ;;
+  --explain)
+   explanations+=("$2")
+   shift
+   ;;
+  *) ;; # Ignore unknown
+  esac
+  shift
+ done
+
+ if [[ -n "$FILTER" ]]; then
+  if [[ "${app,,}" != *"${FILTER,,}"* ]]; then
+   return
+  fi
+ fi
+
+ # Display Output
+ echo -e "---------------------------------------------------"
+ echo -e "📦 APP        : $app"
+ echo -e "💡 Synopsis   : $synopsis"
+ echo -e "⚙️  Command    : $cmd_str"
+
+ if [ ${#explanations[@]} -gt 0 ]; then
+  echo -e "➤ Breakdown  :"
+  for explanation in "${explanations[@]}"; do
+   echo -e "   ⓘ $explanation"
+  done
+ fi
+ echo
+}
+
+function tips {
+
+ # GIT
+ _formalize --app "Git" \
+  --synopsis "Remove all untracked files from directory" \
+  --command "git clean -nfd" \
+  --explain "-n : dry-run - show what will be done" \
+  --explain "-f : force - force operation with Git prompting" \
+  --explain "-d : delete - Remove untracked directories in addition to untracked files"
+
+ # KUBERNETES
+ _formalize --app "Kubernetes" \
+  --synopsis "Launch a temporary busybox pod for debugging connectivity" \
+  --command "kubectl run -it --rm debug --image=busybox --restart=Never -- sh" \
+  --explain "-it : interactive terminal mode" \
+  --explain "--rm : delete the pod automatically when the shell exits" \
+  --explain "--restart=Never : ensure it is a plain pod, not a deployment"
+
+ # TMUX
+ _formalize --app "Tmux" \
+  --synopsis "Synchronize panes (type in one, input goes to all)" \
+  --command "Ctrl+b, then type :setw synchronize-panes" \
+  --explain "Ctrl+b : The default prefix key" \
+  --explain ": : Enters command mode" \
+  --explain "Great for running updates on multiple servers simultaneously"
+
+ # AWK
+ _formalize --app "Awk" \
+  --synopsis "Print specific columns from output (e.g., docker ps)" \
+  --command "docker ps | awk '{print \$1, \$NF}'" \
+  --explain "\$1 : The first column (Container ID)" \
+  --explain "\$NF : The last column (Names)" \
+  --explain "Default delimiter is whitespace"
+
+ _formalize --app "Bash" \
+  --synopsis "Recall and fix the previous command with substitution" \
+  --command "^old^new" \
+  --explain "^old : The string in the previous command you want to replace" \
+  --explain "^new : The string you want to replace it with" \
+  --explain "Example: 'ping gooogle.com' -> '^gooogle^google' fixes typo"
+
+ _formalize --app "Column" \
+  --synopsis "Format messy CLI output into a readable table" \
+  --command "mount | column -t" \
+  --explain "-t : Automatically determine number of columns and align them" \
+  --explain "Usage : Pipe any messy output (like CSVs or system logs) into this"
+
+ _formalize --app "Bash" \
+  --synopsis "Quickly backup a file using brace expansion" \
+  --command "cp filename.txt{,.bak}" \
+  --explain "Expands to : cp filename.txt filename.txt.bak" \
+  --explain "{a,b} : Generates arguments for each item in the comma-list" \
+  --explain "Tip : Also works for creating folders: mkdir -p app/{src,dist,test}"
+}
+
+# Execute main function
+tips
