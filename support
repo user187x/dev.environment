@@ -118,7 +118,6 @@ function initialize {
  log "--- 🚀 Initializing Dev Environment ---"
 
  local answer
- # Syntax Fix: 'read -p prompt var'. Removed the colon inside the variable position.
  read -p "Continue with initialization? (y/n): " answer
 
  if [[ "$answer" != "y" ]]; then
@@ -126,7 +125,6 @@ function initialize {
   exit 0
  fi
 
- # --- Bashrc Handling ---
  if [[ -L "$HOME/.bashrc" ]]; then
   log "ℹ️  .bashrc is already a symlink. Skipping."
  else
@@ -166,9 +164,6 @@ function initialize {
    if tar -tf "$BACKUP_PATH" "$possible" >/dev/null 2>&1; then
     log "✅ File backed-up: $possible"
 
-    # Removed the interactive prompt inside the loop for cleaner automation.
-    # If you want it back, uncomment the read/if block.
-
     rm -rf "$possible" >/dev/null 2>&1
 
     if [[ -e "$possible" ]]; then
@@ -206,12 +201,20 @@ function initialize {
   exit 1
  fi
 
+ echo "Installing additional tools"
+ $SCRIPT_DIR/.bash-tools
+
+ echo "Added additional aliases"
+ $SCRIPT_DIR/.bash-aliases
+
+ echo "Adding additional functions"
+ $SCRIPT_DIR/.bash-functions
+
  log "✨ Environment Initialized Successfully! Starting Tmux..."
 
  # Now we can exec into tmux
  exec tmux -f "$TMUX_CONFIG_DIR/tmux.conf"
 }
 
-# --- Main Execution ---
 # Call the main function
 initialize
