@@ -218,6 +218,7 @@ export -f clean
 # Function to update & clean up after
 function update {
 
+ sudo apt-get update
  sudo apt update && sudo apt upgrade -y
  echo -e "\e[1;92mUpdate Complete!\e[0m"
 
