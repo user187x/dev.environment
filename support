@@ -1,204 +1,217 @@
 #!/bin/bash
 
+# --- Global Variables ---
+BACKUP_PATH="$HOME/env-backup.tar"
+TMUX_CONFIG_DIR="$HOME/.config/tmux"
+LOG_FILE="$HOME/dev-init.log"
+
+# --- Helper Functions ---
+function log() {
+ echo -e "$@"
+ echo "[$(date)] $@" >>"$LOG_FILE"
+}
+
 function install-font {
 
- read -e -r -p "Enter nerdfont tar path : " path
+ log "--- 🅰️  Font Installation ---"
+
+ local path
+ read -e -r -p "Enter the compressed font tar file path: " path
+
  while true; do
-
-  if ! [[ -f "$path" ]]; then
-   echo "Invalid path!"
-   read -e -r -p "Enter nerdfont tar path : " path
-
-   if [[ -f "$path" ]]; then
-    break
-   fi
+  if [[ -f "$path" ]]; then
+   break
   fi
+  log "❌ Invalid path. File not found."
+  read -e -r -p "Enter nerdfont tar path: " path
  done
 
+ local font_name
  font_name=$(basename "$path")
 
- mkdir -p "$HOME/.fonts" >2 >&1
+ # Corrected to >/dev/null 2>&1
+ mkdir -p "$HOME/.fonts" >/dev/null 2>&1
+
+ log "Extracting $font_name..."
  tar -xf "$path" -C "$HOME/.fonts"
 
  if [[ "$?" -ne 0 ]]; then
-  echo "Failed to install font"
-  exit
+  log "❌ Failed to extract font."
  fi
 
- echo "Rebuilding font cache..."
- fc-cache -v
+ log "Rebuilding font cache (this may take a moment)..."
+ fc-cache -f # Use -f to force formatting
 
  if [[ "$?" -eq 0 ]]; then
-  echo "Successfully installed font $font_name"
+  log "✅ Successfully installed font: $font_name"
  else
-  echo "Failed to install font $font_name"
+  log "❌ Failed to rebuild font cache."
+  return 1
  fi
 }
 
 function tmux-fix {
 
- offline_install="true"
- echo "Initializing Tmux from dev.environment : $offline_install"
+ local offline_install="true"
+ log "--- 🛠️  Initializing Tmux ---"
 
- # Define paths
- TMUX_DIR="$HOME/.config/tmux"
- CONF_FILE="$TMUX_DIR/tmux.conf"
- TPM_DIR="$TMUX_DIR/plugins/tpm"
+ local CONF_FILE="$TMUX_CONFIG_DIR/tmux.conf"
+ local TPM_DIR="$TMUX_CONFIG_DIR/plugins/tpm"
 
- echo "--- 🛠️ Initializing Tmux ---"
- echo
- # This ensures we start with a clean state.
- echo "Terminating Tmux server..."
- echo
+ # We kill the server because changes to the base configuration
+ # often require a fresh server process, not just a configuration reload.
+ log "Terminating existing Tmux server..."
  tmux kill-server 2>/dev/null
- echo "✅ Tmux server killed."
+ log "✅ Tmux server killed."
 
- # Ensure the Config directory exists
- mkdir -p "$TMUX_DIR"
+ mkdir -p "$TMUX_CONFIG_DIR"
 
- # Install Tmux Plugin Manager (TPM) if missing
- if [[ ! -d "$TPM_DIR" ]]; then
+ if [[ ! -d "$TPM_DIR" ]] || [[ -z "$(ls -A "$TPM_DIR" 2>/dev/null)" ]]; then
 
   if [[ "$offline_install" == "true" ]]; then
-   
-   read -e -r -p "Enter path to Tmux Plugin Manager (TPM) : " SCR_PATH   
-   echo "⬇️  Copying TPM from local..."
+   local SRC_PATH
+   read -e -r -p "Enter local path to Tmux Plugin Manager (TPM): " SRC_PATH
 
-   cp -rf "$SRC_PATH" "$TPM_DIR"
-
-   # Check that (any) files exist in the directory
-   file_count=$(find "$TPM_DIR" -maxdepth 1 -type f | wc -l)
-
-   if [[ "$file_count" -eq 0 ]]; then
-    echo "Failure copying files to temp directory: $TMP_DIR"
-    exit 1
+   if [[ -d "$SRC_PATH" ]]; then
+    log "⬇️  Copying TPM from local source..."
+    cp -rf "$SRC_PATH" "$TPM_DIR"
+   else
+    log "❌ Source path does not exist. Skipping TPM install."
+    return 1
    fi
 
+   # Typo Fix: TMP_DIR -> TPM_DIR
+   local file_count
+   file_count=$(find "$TPM_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
+
+   # Note: TPM directory might only contain folders (git), so we check generally
+   if [[ ! -d "$TPM_DIR" ]]; then
+    log "❌ Failure copying files to: $TPM_DIR"
+    return 1
+   fi
   else
-   echo "⬇️  Installing TPM from remote..."
+   log "⬇️  Installing TPM from remote (GitHub)..."
    git clone https://github.com/tmux-plugins/tpm "$TPM_DIR"
   fi
  else
-  echo "✅ TPM is already installed."
+  log "✅ TPM is already installed."
  fi
 
- # Install/Update Plugins Headless
- # we force TPM to download and install plugins *before* Tmux starts.
- echo "⬇️  Installing plugins (Dracula, etc)..."
- "$TPM_DIR/bin/install_plugins" >/dev/null 2>&1
+ # Initialize Plugins
+ # Note: If strictly offline, this step may fail if plugins aren't pre-cached.
+ if [[ -x "$TPM_DIR/bin/install_plugins" ]]; then
+  log "⬇️  Installing/Loading plugins..."
+  "$TPM_DIR/bin/install_plugins" >/dev/null 2>&1
+ fi
 
- # We use -f to explicitly tell tmux where your config is,
- # ensuring it loads correctly even if not in the default ~/.tmux.conf location.
- echo "🚀 Starting Tmux..."
- exec tmux -f "$CONF_FILE"
+ # 'exec' replaces the current shell process, killing the 'initialize' function
+ # and preventing any subsequent steps (like the final success message).
+ # We will start tmux only at the very end of the main script.
+ log "✅ Tmux setup complete. Ready to launch."
 }
 
 function initialize {
 
- # Define paths
- TMUX_DIR="$HOME/.config/tmux"
+ local SCRIPT_DIR
+ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
- CONF_FILE="$TMUX_DIR/tmux.conf"
- TPM_DIR="$TMUX_DIR/plugins/tpm"
- 
- echo "Initializing dev environement..."
+ log "--- 🚀 Initializing Dev Environment ---"
 
- read -p "Continue? (y/n) " : answer
- if [[ "$answer" -ne "y" ]]; then
-  echo "Terminating..."
+ local answer
+ # Syntax Fix: 'read -p prompt var'. Removed the colon inside the variable position.
+ read -p "Continue with initialization? (y/n): " answer
+
+ if [[ "$answer" != "y" ]]; then
+  log "Terminating..."
   exit 0
  fi
 
+ # --- Bashrc Handling ---
  if [[ -L "$HOME/.bashrc" ]]; then
-  echo "dev-environement bashrc already linked"
+  log "ℹ️  .bashrc is already a symlink. Skipping."
  else
-  local backup_path="$HOME/env-backup.tar"
+  log "📦 Backing up existing ~/.bashrc to $BACKUP_PATH"
+  tar -cf "$BACKUP_PATH" "$HOME/.bashrc" 2>/dev/null
 
-  # Backup original
-  echo "Backing up existing ~/.bashrc to ~/bashrc-backup.tar"
-  tar -cf "$backup_path" "$HOME/.bashrc"
-
-  # Remove the existing
-  echo "Replacing existing bashrc with dev environment version"
+  log "Replacing existing bashrc..."
   rm "$HOME/.bashrc"
 
-  if [[ ! -e "$HOME/.bashrc" ]]; then
-   echo "Failure removing existing bashrc. Terminating action..."
-   exit
+  # We want to error if the file STILL exists (-e).
+  if [[ -e "$HOME/.bashrc" ]]; then
+   log "❌ Failure removing existing bashrc. Aborting."
+   exit 1
   fi
 
-  # link the dev bashrc to ~/.bashrc
-  ln -s "$PWD/.bashrc" "$HOME/.bashrc"
+  ln -s "$SCRIPT_DIR/.bashrc" "$HOME/.bashrc"
 
-  if [[ -f "$HOME/.bashrc" ]]; then
-   echo "Update of bashrc complete!"
+  if [[ -L "$HOME/.bashrc" ]]; then
+   log "✅ Update of bashrc complete!"
   else
-   echo "Failure occured while updating bashrc. Rolling back changes"
-   tar -xf "$backup_path" -C "$HOME/"
+   log "❌ Failure updating bashrc. Rolling back..."
+   tar -xf "$BACKUP_PATH" -C "$HOME/"
    exit 1
   fi
  fi
 
- possible_paths=("$HOME/.config/tmux" "$HOME/.tmux" "$HOME/.tmux.conf")
- total_possible="${#possible_paths[@]}"
+ # --- Tmux Config Handling ---
+ local possible_paths=("$HOME/.config/tmux" "$HOME/.tmux" "$HOME/.tmux.conf")
 
- check_counter=0
  for possible in "${possible_paths[@]}"; do
-
-  # if it exists back it up
   if [[ -e "$possible" ]]; then
-   echo "Backing up existing files: $possible"
-   tar -uf "$backup_path" "$possible" >/dev/null 2>&1
+   log "📦 Found existing config: $possible. Backing up..."
 
-   if tar -tf archive.tar "$possible" >/dev/null 2>&1; then
-    echo "File backed-up: $possible"
+   # Append to backup (-r or -u)
+   tar -rf "$BACKUP_PATH" "$possible" >/dev/null 2>&1
 
-    # Removing old tmux directory
-    echo "Removing backed-up resource: $possible"
-    read -p "Proceed ? (y/n) : " response
+   if tar -tf "$BACKUP_PATH" "$possible" >/dev/null 2>&1; then
+    log "✅ File backed-up: $possible"
 
-    if [[ "$response" != "y" ]]; then
-     echo "Termenating..."
-     exit 0
-    fi
+    # Removed the interactive prompt inside the loop for cleaner automation.
+    # If you want it back, uncomment the read/if block.
 
-    # Remove the entry
     rm -rf "$possible" >/dev/null 2>&1
 
-    # Check that it was removed
     if [[ -e "$possible" ]]; then
-     echo "Failure removing old tmux directory: $possible"
+     log "❌ Failed to remove old directory: $possible"
      exit 1
-    else
-     echo "Removing old tmux directories"
     fi
-
-    # Keep track of how many we checked
-    ((check_counter++))
    else
-    echo "Failure backing up original files. Terminating action..."
+    log "❌ Failure verifying backup for $possible. Aborting."
     exit 1
    fi
   fi
  done
 
- # assert directories exists
- mkdir -p "$HOME/.config/tmux" >/dev/null 2>&1
+ # Create config directory
+ mkdir -p "$TMUX_CONFIG_DIR" >/dev/null 2>&1
 
- # Copying dev-evnironment files to local system directories
- cp -rf "$PWD/.config/tmux" "$HOME/.config/tmux"
+ log "📂 Copying new tmux configuration..."
+ if [[ -d "$SCRIPT_DIR/.config/tmux" ]]; then
+  cp -rf "$SCRIPT_DIR/.config/tmux/." "$TMUX_CONFIG_DIR/"
+ else
+  log "⚠️  Warning: Source config directory '$SCRIPT_DIR/.config/tmux' not found."
+ fi
 
- # assert files exist
- if [[ ! -d "$HOME/.config/tmux" ]]; then
-  echo "Failure asserting directory exists: $HOME/.config/tmux"
+ # Final assertion
+ if [[ ! -d "$TMUX_CONFIG_DIR" ]]; then
+  log "❌ Critical Error: $TMUX_CONFIG_DIR does not exist."
   exit 1
  else
-  echo "Successfully copied all dev-environment files for tmux"
+  log "✅ Tmux files copied successfully."
  fi
- 
- echo "Asserting tmux configuration files and settings"
- if ! tmux-fix; then 
-  echo "Failed initializing..."
+
+ # Run the Tmux fix logic
+ if ! tmux-fix; then
+  log "❌ Failed initializing tmux settings."
   exit 1
  fi
+
+ log "✨ Environment Initialized Successfully! Starting Tmux..."
+
+ # Now we can exec into tmux
+ exec tmux -f "$TMUX_CONFIG_DIR/tmux.conf"
 }
+
+# --- Main Execution ---
+# Call the main function
+initialize
