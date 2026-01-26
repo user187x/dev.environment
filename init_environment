@@ -59,39 +59,43 @@ function check_dependencies() {
 }
 
 function install_font() {
- log "--- 🅰️  Font Installation ---"
 
- # In dry run, we skip the interactive prompts to automate the test flow
- if [[ "$DRY_RUN" == "true" ]]; then
-  log "🧱 [DRY RUN] Skipping interactive font prompts."
-  log "🧱 [DRY RUN] Would extract font to $HOME/.fonts and run fc-cache -f"
-  return 0
- fi
+  local font_path
 
- read -r -p "Do you want to install a nerd font? (y/n): " do_font
- if [[ "$do_font" != "y" ]]; then return 0; fi
+  if [[ -f "$1" ]]; then 
+   font_path="$1"
+  fi
 
- local path
- read -e -r -p "Enter the compressed font tar file path: " path
+  log "--- 🅰️  Font Installation ---"
 
- while true; do
-  path="${path/#\~/$HOME}"
-  if [[ -f "$path" ]]; then break; fi
-  log "❌ Invalid path. File not found: $path"
-  read -e -r -p "Enter nerdfont tar path: " path
- done
+  # In dry run, we skip the interactive prompts to automate the test flow
+  if [[ "$DRY_RUN" == "true" ]]; then
+   log "🧱 [DRY RUN] Skipping interactive font prompts."
+   log "🧱 [DRY RUN] Would extract font to $HOME/.fonts and run fc-cache -f"
+   return 0
+  fi
 
+  if [[ -z "$font_path" ]]; then
+   while true; do
+    read -e -r -p "Enter font file path: " font_path
+    if [[ -f "$font_path" ]]; then
+     break 
+    fi
+   done
+  fi
+  
  safe_execute "mkdir -p \"$HOME/.fonts\" >/dev/null 2>&1"
- safe_execute "tar -xf \"$path\" -C \"$HOME/.fonts\""
+ safe_execute "unzip \"$font_path\" -d \"$HOME/.fonts\""
 
- log "Rebuilding font cache..."
- safe_execute "fc-cache -f"
+  log "Rebuilding font cache..."
+  safe_execute "fc-cache -f"
 }
 
 function tmux_fix() {
- local offline_install="false"
+
  log "--- 🛠️  Initializing Tmux ---"
  local TPM_DIR="$TMUX_CONFIG_DIR/plugins/tpm"
+ local PLUGINS_DIR="$TMUX_CONFIG_DIR/plugins"
 
  if pgrep -x "tmux" >/dev/null; then
   if [[ "$DRY_RUN" == "true" ]]; then
@@ -108,11 +112,17 @@ function tmux_fix() {
  safe_execute "mkdir -p \"$TMUX_CONFIG_DIR\""
 
  if [[ ! -d "$TPM_DIR" ]]; then
-  # We assume online for dry run logic to show the git clone
   log "⬇️  Installing TPM from remote (GitHub)..."
   safe_execute "git clone https://github.com/tmux-plugins/tpm \"$TPM_DIR\""
  else
-  log "✅ TPM is already installed."
+  log "✅ TPM is already installed (Local/Offline)."
+ fi
+
+ # TPM requires plugin scripts (*.tmux) to be executable to auto-load.
+ # Copied files often lose this attribute.
+ if [[ -d "$PLUGINS_DIR" ]]; then
+  log "🔧 Restoring executable permissions for offline plugins..."
+  safe_execute "chmod -R u+x \"$PLUGINS_DIR\""
  fi
 
  if [[ -x "$TPM_DIR/bin/install_plugins" ]]; then
@@ -191,7 +201,7 @@ function initialize() {
  fi
 
  tmux_fix
- install_font
+ install_font "$SCRIPT_DIR/fonts/nerdfont.zip"
 
  # --- Sourcing files ---
  local aux_files=(".bashrc_packages" ".bashrc_aliases" ".bashrc_functions")
