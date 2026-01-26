@@ -358,3 +358,55 @@ search() {
  fi
 }
 export -f search
+
+function list-fonts {
+
+ local filter
+ local enabled="false"
+
+ # List all avaialable filsters
+ local x=$(toilet --filter list)
+ local y=$(echo "$x" | awk '{print $1}')
+ local z=$(echo "$y" | xargs -I {} bash -c 'f="{}"; echo "${f%?}"')
+ local filters=$(echo "$z" | sed '1d')
+
+ # if user entered input
+ if [[ ! -z "$1" ]]; then
+  filter="$1"  
+  for filter in "${filters[@]}"; do
+   if [[ "$filter" == "$input" ]]; then
+    enabled="true"
+    break
+   fi
+  done
+ fi
+
+ if [[ "$enabled" != "true" ]]; then
+  echo "$filters"
+  read -r -p "Choose available filter: " input
+  filter="$input"
+  enabled="true"
+ fi 
+
+ counter=0
+ for f in /usr/share/figlet/*.[tf]lf; do
+  ((counter++))
+  font_name=$(basename "${f%.*}")
+
+  if [[ "$enabled" == "true" ]]; then
+   toilet -f $font_name --filter "$filter" "Example"
+  else
+   toilet -f $font_name --gay "Example"
+  fi
+
+  echo -e "\e[90mFont :\e[92m$font_name\e[0m"
+  modulo=$((counter % 5))
+  if [[ "$modulo" -eq 0 ]]; then
+   read -r -p "Press any button to continue (or X to exit) " input
+   if [[ "$input" =~ ^[xX]$ ]]; then
+    return 0
+   fi
+  fi
+ done
+}
+export -f list-fonts
