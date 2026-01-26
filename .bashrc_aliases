@@ -1,0 +1,65 @@
+#!/bin/bash
+
+################################################
+# ALIASES                                      #
+################################################
+
+# enable color support of ls and also add handy aliases
+if [ -x /usr/bin/dircolors ]; then
+  test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+  alias ls='ls --color=auto'
+  alias dir='dir --color=auto'
+  alias vdir='vdir --color=auto'
+  alias grep='grep --color=auto'
+  alias fgrep='fgrep --color=auto'
+  alias egrep='egrep --color=auto'
+fi
+
+# system tool aliases
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+
+# dev tool alias
+
+# Ubuntu-isms
+if command -v batcat > /dev/null 2>&1; then
+ batcmd="batcat"
+else
+ batmcd="bat"
+fi
+
+alias bat="$batcmd --style=full"
+
+# Project Navigation
+cnc_path="$HOME/Projects/dev.environment"
+if [[ -d "$cnc_path" ]]; then
+  alias denv="cd $cnc_path"
+else
+  # Only echo warning if interactive
+  if [[ $- == *i* ]]; then
+    echo "Setup your CNC project to initialize properly: $cnc_path missing."
+  fi
+fi
+
+# kubernetes aliases
+alias k='kubecolor'
+alias v="vim"
+alias tf='terraform'
+alias k9s='k9s --headless'
+alias k9='k9s --headless'
+alias kubectl="kubecolor"
+alias pods="kubectl get pods -A"
+alias deploys="kubectl get deploy -A"
+alias sas="kubectl get sa -A"
+alias pvs="kubectl get pv -A"
+alias pvcs="kubectl get pvc -A"
+alias svcs="kubectl get svc -A"
+alias w-pods="watch -n 1 'kubectl get pods -A'"
+alias w-deploys="watch -n 1 'kubectl get deploy -A'"
+alias w-svcs="watch -n 1 'kubectl get svc -A'"
+alias current-context="kubectl config current-context"
+alias contexts="kubectl config get-contexts"
+
+# Add an "alert" alias for long running commands
+alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
