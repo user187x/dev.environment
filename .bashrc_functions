@@ -1,264 +1,244 @@
 #!/bin/bash
 
-function clipboard {
+# Define global colors for consistency across functions
+R='\e[1;91m' # Red
+G='\e[1;92m' # Green
+Y='\e[1;93m' # Yellow
+B='\e[1;94m' # Blue
+M='\e[3;90m' # Muted/Grey
+NC='\e[0m'   # No Color
 
- if [[ "$#" -eq 0 ]]; then
-  echo -e " \e[1;92m(i)\e[0m Usage : \e[1;27mclipboard\e[0m \e[93m<file>\e[0m"
+############################################
+# UTILITY FUNCTIONS
+############################################
+
+# Enhanced clipboard: Supports X11, Wayland, and MacOS
+clipboard() {
+ local file="$1"
+
+ if [[ -z "$file" ]]; then
+  echo -e " ${G}(i)${NC} Usage : \e[1;27mclipboard\e[0m ${Y}<file>${NC}"
+  return 1
  fi
 
- if [[ ! -f "$1" ]]; then
-  echo -e " \e[1;91m(!)\e[0m File not found: $1"
+ if [[ ! -f "$file" ]]; then
+  echo -e " ${R}(!)${NC} File not found: $file"
+  return 1
  fi
 
- xclip -selection clipboard $1
- filename=$(basename $1)
+ if command -v wl-copy >/dev/null; then
+  # Wayland
+  cat "$file" | wl-copy
+ elif command -v pbcopy >/dev/null; then
+  # MacOS
+  cat "$file" | pbcopy
+ elif command -v xclip >/dev/null; then
+  # X11
+  xclip -selection clipboard <"$file"
+ else
+  echo -e " ${R}(!)${NC} No clipboard utility (xclip, wl-copy, pbcopy) found."
+  return 1
+ fi
 
- echo -e "\e[3;90m File \e[1;92m$filename\e[0m \e[3;90mcontents copied to system clipboard\e[0m"
-}
-
-gdiff() {
- grc diff "$@"
+ echo -e "${M} File ${G}$(basename "$file")${NC}${M} contents copied to system clipboard${NC}"
 }
 
 fmt() {
-
- if [[ "$#" -eq 0 ]]; then
+ local script="$1"
+ if [[ -z "$script" ]]; then
   echo "Usage : fmt <bash-script>"
   return 1
  fi
 
- script="$1"
-
- if [[ ! -f "$1" ]]; then
-  echo "File not found: $1"
+ if [[ ! -f "$script" ]]; then
+  echo "File not found: $script"
   return 1
  fi
 
- shfmt -i 1 -w "$1"
-
- if [[ "$?" -eq 0 ]]; then
-  echo -e " \e[90m(i) Bash Script Formatted:\e[0m \e[1;92m$1\e[0m"
- else
-  echo -e " \e[1;91m(!)\e[0m Failure formatting script: \e[1;92m$1\e[0m"
- fi
-}
-# Fuzzy file search
-function fz {
- local selected_file="$(fzf "$@")"
-
- if [[ -n "$selected_file" ]]; then
-  # Fix: Do not escape here. It breaks dirname.
-  # selected_file=$(printf "%q" "$selected_file")
-
-  local extension="${selected_file##*.}"
-  local directory=$(dirname "$selected_file")
-
-  # Check system tools
-  local editor="vim"
-  [[ -x /usr/bin/gedit ]] && editor="gedit"
-
-  OPTION=$(whiptail \
-   --title "Fuzzy Search" \
-   --menu "Choose an option:" \
-   15 50 5 \
-   "0" "Open Directory" \
-   "1" "View File Contents" \
-   "2" "Edit with VIM" \
-   "3" "Open with system" \
-   "4" "CD to directory" \
-   "5" "Exit" \
-   3>&1 1>&2 2>&3)
-
-  if [ "$OPTION" == "0" ]; then
-   # Fix: 'open' is macOS. Use xdg-open for Linux
-   xdg-open "$directory" >/dev/null 2>&1
-  elif [ "$OPTION" == "1" ]; then
-   bat "$selected_file"
-  elif [ "$OPTION" == "2" ]; then
-   sudo vim "$selected_file"
-  elif [ "$OPTION" == "3" ]; then
-   if [[ "$extension" == "mp3" ]]; then
-    echo "Listening to : $selected_file"
-    mpv --no-video "$selected_file" >/dev/null 2>&1
-   else
-    # Fallback to system default
-    xdg-open "$selected_file" >/dev/null 2>&1
-   fi
-  elif [ "$OPTION" == "4" ]; then
-   echo
-   echo -e "Changing directory [\e[1;92m$directory\e[0m]"
-   cd "$directory"
-   ls -alt "$directory"
-   echo
+ if command -v shfmt >/dev/null; then
+  shfmt -i 2 -w "$script" # Changed indent to 2 (standard)
+  if [[ "$?" -eq 0 ]]; then
+   echo -e " ${M}(i) Bash Script Formatted:${NC} ${G}$script${NC}"
   else
-   return
+   echo -e " ${R}(!)${NC} Failure formatting script: ${G}$script${NC}"
   fi
-  echo -e "\e[3;90mSelected File: \e[3;92m$selected_file\e[0m"
+ else
+  echo -e " ${R}(!)${NC} 'shfmt' is not installed."
  fi
 }
 
+# Consolidated and fixed Fuzzy Search
 fz() {
+ # Dependency check
+ if ! command -v fzf >/dev/null || ! command -v whiptail >/dev/null; then
+  echo "Error: fzf and whiptail are required."
+  return 1
+ fi
 
- local selected_file="$(fzf "$@")"
- selected_file=$(printf "%q" "$selected_file")
+ local selected_item
+ selected_item="$(fzf "$@")"
 
- if [[ -n "$selected_file" ]]; then
+ if [[ -n "$selected_item" ]]; then
+  local extension="${selected_item##*.}"
+  local directory
 
-  local tool=""
-  local extension="${selected_file##*.}"
-
-  if [[ "$extension" == "mp3" ]]; then
-   tool="mp3"
+  # Handle if user selected a directory or a file
+  if [[ -d "$selected_item" ]]; then
+   directory="$selected_item"
   else
-   tool="Gedit"
+   directory=$(dirname "$selected_item")
   fi
 
-  option=$(whiptail --title "Fuzzy Search" \
-   --menu "Choose an option:" 15 50 4 \
-   "1" "View File Contents" \
-   "2" "Edit with VIM" \
-   "3" "Open with system $tool app" \
-   "4" "Go To (directory)" \
-   "5" "Exit" \
+  # Determine default tool based on extension
+  local tool_label="System Default"
+  if [[ "$extension" == "mp3" ]]; then
+   tool_label="Play Audio"
+  elif [[ -x /usr/bin/gedit ]]; then
+   tool_label="Gedit"
+  fi
+
+  # Whiptail Menu
+  local option
+  option=$(whiptail --title "Fuzzy Action: $(basename "$selected_item")" \
+   --menu "Choose an action:" 15 60 6 \
+   "1" "View File (Bat)" \
+   "2" "Edit (Vim)" \
+   "3" "$tool_label" \
+   "4" "Open Directory (GUI)" \
+   "5" "CD to Directory" \
+   "6" "Cancel" \
    3>&1 1>&2 2>&3)
 
-  if [ "$option" == "1" ]; then
-   bat "$selected_file"
-  elif [ "$option" == "2" ]; then
-   sudo vim "$selected_file"
-  elif [ "$option" == "3" ]; then
-   if [[ "$tool" =~ "mp3" ]]; then
-    echo "Listening to : $selected_file"
-    mpv --no-video $selected_file >/dev/null 2>&1
+  case "$option" in
+  "1")
+   bat "$selected_item"
+   ;;
+  "2")
+   # Use sudo if not writable
+   if [ -w "$selected_item" ]; then
+    vim "$selected_item"
    else
-    sudo gedit "$selected_file" >/dev/null 2>&1
+    sudo vim "$selected_item"
    fi
-  elif [ "$option" == "4" ]; then
-   echo
-   echo "Changing directory..."
-   if [[ -d "$selected_file" ]]; then
-    cd "$selected_file"
+   ;;
+  "3")
+   if [[ "$extension" == "mp3" ]]; then
+    echo "Listening to: $selected_item"
+    mpv --no-video "$selected_item" >/dev/null 2>&1
+   elif [[ "$tool_label" == "Gedit" ]]; then
+    nohup gedit "$selected_item" >/dev/null 2>&1 &
    else
-    directory=$(dirname "$selected_file")
-    cd "$selected_file"
+    xdg-open "$selected_item" >/dev/null 2>&1
    fi
-  else
+   ;;
+  "4")
+   xdg-open "$directory" >/dev/null 2>&1
+   ;;
+  "5")
+   echo -e "${M}Changing directory to: ${G}$directory${NC}"
+   cd "$directory" || return
+   ls -F --color=auto
+   ;;
+  *)
    return 0
-  fi
-
-  if [[ "$option" == "4" ]]; then
-   echo -e "\e[3;90m At Directory: \e[3;92m$selected_file\e[0m"
-  else
-   echo -e "\e[3;90mSelected File: \e[3;92m$selected_file\e[0m"
-  fi
-
+   ;;
+  esac
  fi
 }
 
-function qr-code {
- if [[ -z "$1" ]]; then
-  read -p "Text to convert : " text
- else
-  text="$1"
+qr-code() {
+ local text="$1"
+ if [[ -z "$text" ]]; then
+  read -r -p "Text to convert: " text
  fi
 
- local export_filename=""
- local export_dir=""
- local file_ext=".png"
+ if [[ -z "$text" ]]; then return; fi
 
- read -e -r -p "Save location (path/to/file): " export_path
+ local export_path
+ read -e -r -p "Save location (leave empty for terminal only): " export_path
 
- # Fix: Handle directory vs filename logic
- if [[ -d "$export_path" ]]; then
-  export_dir="${export_path%/}" # remove trailing slash
-  export_filename="qr_code"
- else
-  export_dir=$(dirname "$export_path")
-  export_filename=$(basename "$export_path")
+ if [[ -n "$export_path" ]]; then
+  local export_dir
+  local export_filename
+
+  if [[ -d "$export_path" ]]; then
+   export_dir="${export_path%/}"
+   export_filename="qr_code"
+  else
+   export_dir=$(dirname "$export_path")
+   export_filename=$(basename "$export_path")
+  fi
+
+  # Generate files
+  echo "Saving to ${export_dir}..."
+  qrencode -m 2 -s 10 -o "${export_dir}/${export_filename}.png" "$text"
+  echo -e "${G}Saved:${NC} ${export_dir}/${export_filename}.png"
  fi
 
- # Fix: Typo UFT8 -> UTF8, added missing slash in path
- echo "Saving to ${export_dir}/${export_filename}-1${file_ext}..."
- qrencode -m 2 -s 1 -o "${export_dir}/${export_filename}-1${file_ext}" "$text"
-
- echo "Generating terminal preview..."
+ echo "Terminal Preview:"
  qrencode -m 2 -s 1 -t UTF8 -l L "$text"
-
- # Second variation
- qrencode -m 2 -s 1 -t UTF8 --foreground="3599FE" --background="FFFFFF" -o "${export_dir}/${export_filename}-2${file_ext}" -l L "$text"
- echo "Saved QR file 2"
-
- # Terminal preview 2
- qrencode -m 2 -s 1 --foreground="3599FE" --background="FFFFFF" -t UTF8 -l L "$text"
  echo
 }
-
 export -f qr-code
 
-function image-to-asci {
+image-to-asci() {
  if [[ -f "$1" ]]; then
   jp2a -i --chars="XxxVO" "$1"
  else
   echo "File not found [$1]"
  fi
 }
-
 export -f image-to-asci
 
-function convert-image {
- if [[ -f "$1" ]]; then
-  # Fix: Ensure output argument is passed
-  if [[ -z "$2" ]]; then
-   echo "Usage: convert-image <input> <output>"
-   return 1
-  fi
+convert-image() {
+ if [[ -f "$1" ]] && [[ -n "$2" ]]; then
   convert "$1" -quality 100 "$2"
+  echo -e "${G}Converted:${NC} $1 -> $2"
  else
-  echo "File not found [$1]"
+  echo "Usage: convert-image <input> <output>"
+  return 1
  fi
 }
 export -f convert-image
 
-function alert {
-
+alert() {
  local last_exit_status=$?
-
  local icon_name="terminal"
+ local msg
+
  if [ "$last_exit_status" -ne 0 ]; then
   icon_name="error"
  fi
 
- local msg
  msg=$(history | tail -n1 | sed -e 's/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//')
-
- notify-send --urgency=low -i "$icon_name" "$msg"
+ notify-send --urgency=low -i "$icon_name" "Command Complete" "$msg"
 }
 
 ############################################
 # TERMINAL FUNCTIONS
 ############################################
 
-# Make the terminal change colors
+# Pre-calculate colors once to speed up prompt rendering
+_DYN_RED="\[\e[38;5;196m\]"
+_DYN_GREEN="\[\e[38;5;84m\]"
+_DYN_YELLOW="\[\e[0;33m\]"
+_DYN_BLUE="\[\e[0;34m\]"
+_DYN_MAGENTA="\[\e[0;35m\]"
+_DYN_CYAN="\[\e[0;36m\]"
+_DYN_NC="\[\e[0m\]"
+_DYN_PALETTE=("$_DYN_RED" "$_DYN_YELLOW" "$_DYN_GREEN" "$_DYN_CYAN" "$_DYN_BLUE" "$_DYN_MAGENTA")
+
 update_dynamic_prompt() {
  local EXIT_CODE=$?
+ local idx=$(($(date +%-S) % ${#_DYN_PALETTE[@]}))
 
- local RED="\[\e[38;5;196m\]"
- local GREEN="\[\e[38;5;84m\]"
- local YELLOW="\[\e[0;33m\]"
- local BLUE="\[\e[0;34m\]"
- local MAGENTA="\[\e[0;35m\]"
- local CYAN="\[\e[0;36m\]"
- local NC="\[\e[0m\]"
-
- local PALETTE=("$RED" "$YELLOW" "$GREEN" "$CYAN" "$BLUE" "$MAGENTA")
- # Fix: Ensure arithmetic evaluation is robust
- local idx=$(($(date +%-S) % ${#PALETTE[@]}))
- local COLOR="${PALETTE[$idx]}"
+ # Note: The random color logic is applied to the prompt symbol,
+ # but distinct Green/Red is used for success/fail.
 
  if [[ "$EXIT_CODE" -eq 0 ]]; then
-  PS1="${GREEN} ➤  ${NC}"
+  PS1="${_DYN_GREEN} ➤  ${_DYN_NC}"
  else
-  PS1="${RED} ➤💥  ${NC}"
+  PS1="${_DYN_RED} ➤💥  ${_DYN_NC}"
  fi
 }
 
@@ -266,10 +246,10 @@ update_dynamic_prompt() {
 # SOUND FUNCTIONS
 ############################################
 
-# Closing Sound
-function exit_sound {
- if [[ -f "/opt/audio/twirp.mp3" ]] && command -v mpv >/dev/null; then
-  nohup mpv --no-video /opt/audio/twirp.mp3 >/dev/null 2>&1 &
+exit_sound() {
+ local sound_file="/opt/audio/twirp.mp3"
+ if [[ -f "$sound_file" ]] && command -v mpv >/dev/null; then
+  nohup mpv --no-video "$sound_file" >/dev/null 2>&1 &
   disown
  fi
 }
@@ -278,37 +258,36 @@ function exit_sound {
 # SYSTEM FUNCTIONS                             #
 ################################################
 
-# House cleaning
-function clean {
+clean() {
  sudo apt clean
  sudo apt autoclean
  sudo apt remove -y
  sudo apt autoremove -y
- echo -e "\e[1;92mCleanup Complete\e[0m\n"
+ echo -e "${G}Cleanup Complete${NC}\n"
 }
 export -f clean
 
-# Function to update & clean up after
-function update {
+update() {
  sudo apt-get update
  sudo apt update && sudo apt upgrade -y
- echo -e "\e[1;92mUpdate Complete!\e[0m"
+ echo -e "${G}Update Complete!${NC}"
  clean
 }
 export -f update
 
 # Overrides (Requires 'grc' installed)
+# This replaces the redundant 'gdiff' function
 if command -v grc >/dev/null; then
- function netstat { grc sudo netstat "$@"; }
- function diff { grc diff "$@"; }
- function ping { grc ping "$@"; }
- function head { grc head "$@"; }
- function tail { grc tail "$@"; }
- function mount { grc mount "$@"; }
- function ps { grc sudo ps "$@"; }
+ netstat() { grc sudo netstat "$@"; }
+ diff() { grc diff "$@"; }
+ ping() { grc ping "$@"; }
+ head() { grc head "$@"; }
+ tail() { grc tail "$@"; }
+ mount() { grc mount "$@"; }
+ ps() { grc sudo ps "$@"; }
 fi
 
-function prettyJson {
+prettyJson() {
  local input="$1"
  if [[ -f "$input" ]]; then
   cat "$input" | jq -C . | less -R
@@ -318,7 +297,7 @@ function prettyJson {
 }
 export -f prettyJson
 
-function spin {
+spin() {
  local message="$1"
  local delay=0.2
  local spinner="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
@@ -330,11 +309,11 @@ function spin {
 }
 export -f spin
 
-function play {
+play() {
  if [[ -f "$1" ]]; then
   mpv --no-video "$1"
  elif [[ -d "$1" ]]; then
-  media_files=()
+  local media_files=()
   while IFS= read -r file; do
    media_files+=("$file")
   done < <(find "$1" -type f -iname "*.mp3")
@@ -342,6 +321,8 @@ function play {
   if [[ "${#media_files[@]}" -ne 0 ]]; then
    echo "Found ${#media_files[@]} MP3s"
    mpv "${media_files[@]}"
+  else
+   echo "No MP3s found in directory."
   fi
  else
   echo "Usage : play <filePath|dirPath>"
@@ -349,22 +330,30 @@ function play {
 }
 export -f play
 
-# Mirro function for different name
-function mp3 { play "$@"; }
+# Mirror function
+mp3() { play "$@"; }
 export -f mp3
 
-function search {
- local selected_line=$(rg --color=always \
+search() {
+ if [[ -z "$1" ]]; then
+  echo "Usage: search <term>"
+  return 1
+ fi
+
+ local selected_line
+ selected_line=$(rg --color=always \
   --line-number \
   --no-heading "$1" |
   fzf --ansi \
    --delimiter=: --nth=1,3.. \
    --preview 'bat --style=numbers --color=always {1} --highlight-line {2} || cat {1}')
 
- local file_path=$(echo "$selected_line" | cut -d: -f1)
+ local file_path
+ file_path=$(echo "$selected_line" | cut -d: -f1)
 
  if [[ -n "$file_path" ]]; then
   echo "Selected file : $file_path"
   vim "$file_path"
  fi
 }
+export -f search
