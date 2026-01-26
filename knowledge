@@ -142,13 +142,9 @@ function tips {
 
     _formalize --app "Toilet" \
     --synopsis "Pretty print text / ascii generation" \
-    --command "toilet -f slant --filter border --gay 'Hello World'" \
-    --explain "-f       : selected font name (found below)" \
-    --explain "--filter : metal,border..." \
-    --explain "--gay    : rainbow color" \
-    --tip     "To find fonts : " \
-
-}
+    --command "toilet -f slant --filter metal 'Hello World'" \
+    --explain "--font   : selected font name" \
+    --explain "--filter : metal,border..."
 }
 
 # Execute
