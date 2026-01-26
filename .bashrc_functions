@@ -27,14 +27,9 @@ clipboard() {
  fi
 
  if command -v wl-copy >/dev/null; then
-  # Wayland
-  cat "$file" | wl-copy
- elif command -v pbcopy >/dev/null; then
-  # MacOS
-  cat "$file" | pbcopy
+  cat "$file" | wl-copy 2> /dev/null
  elif command -v xclip >/dev/null; then
-  # X11
-  xclip -selection clipboard <"$file"
+  cat "$file" | xclip -selection clipboard 2> /dev/null 
  else
   echo -e " ${R}(!)${NC} No clipboard utility (xclip, wl-copy, pbcopy) found."
   return 1
