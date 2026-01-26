@@ -27,6 +27,7 @@ tools=(
  "notify-send:libnotify-bin"
  "yq"
  "figlet"
+ "toilet"
  "tree"
  "whiptail"
  "duf"

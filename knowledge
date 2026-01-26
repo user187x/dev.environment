@@ -139,6 +139,16 @@ function tips {
     --command "cp file.txt{,.bak}" \
     --explain "{a,b} : Expands to 'file.txt' and 'file.txt.bak'" \
     --explain "Use Case : Quick config backups"
+
+    _formalize --app "Toilet" \
+    --synopsis "Pretty print text / ascii generation" \
+    --command "toilet -f slant --filter border --gay 'Hello World'" \
+    --explain "-f       : selected font name (found below)" \
+    --explain "--filter : metal,border..." \
+    --explain "--gay    : rainbow color" \
+    --tip     "To find fonts : " \
+
+}
 }
 
 # Execute
