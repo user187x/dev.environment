@@ -1,9 +1,15 @@
 #!/bin/bash
 
+# 1. Update repositories first
+echo "Updating package lists..."
+sudo apt update -y
+
+# format: "binary_name:package_name"
+# If package name matches binary, just put the name.
 tools=(
  "tmux"
  "vim"
- "bat"
+ "batcat:bat" # Binary is batcat, package is bat
  "curl"
  "wget"
  "openssl"
@@ -12,27 +18,27 @@ tools=(
  "gedit"
  "colordiff"
  "tty-clock"
- "openjdk-25-jdk"
+ "java:default-jdk" # changed openjdk-25 to default-jdk (25 is rarely in default repos)
  "visualvm"
  "lolcat"
  "build-essential"
- "net-tools"
+ "netstat:net-tools" # command is netstat, package is net-tools
  "jq"
- "libnotify-bin"
+ "notify-send:libnotify-bin"
  "yq"
  "figlet"
  "tree"
  "whiptail"
  "duf"
  "fzf"
- "delta"
+ "delta:git-delta" # package is git-delta
  "thefuck"
  "shfmt"
  "shellcheck"
  "yamllint"
  "neofetch"
  "expect"
- "libxml2-utils"
+ "xmllint:libxml2-utils"
  "jc"
  "gufw"
  "ranger"
@@ -43,21 +49,34 @@ tools=(
 failed=()
 installed=()
 
-for tool in "${tools[@]}"; do
- if ! command -v "$tool" > /dev/null 2>&1; then
-  echo "Installing $tool..."
-  if ! sudo apt install "$tool" -y; then
-   echo -e "Tool [\e[1;92m$tool\e[0m] failed to install"
-   failed+=("$tool")
+echo "--- 📦 Starting APT Tool Installation ---"
+
+for item in "${tools[@]}"; do
+ # Split the string by colon to get binary and package
+ if [[ "$item" == *":"* ]]; then
+  binary="${item%%:*}"
+  package="${item##*:}"
+ else
+  binary="$item"
+  package="$item"
+ fi
+
+ if ! command -v "$binary" >/dev/null 2>&1; then
+  echo "Installing $package..."
+  if ! sudo apt install "$package" -y; then
+   echo -e "Tool [\e[1;91m$package\e[0m] failed to install"
+   failed+=("$package")
   else
-   installed+=("$tool")
+   echo -e "Tool [\e[1;92m$package\e[0m] Installed"
+   installed+=("$package")
   fi
  else
-  echo -e "Tool [\e[1;92m$tool\e[0m] Installed"
-  installed+=("$tool")
+  echo -e "Tool [\e[1;92m$package\e[0m] already installed"
+  installed+=("$package")
  fi
 done
 
+echo ""
 echo -e "(i) Total Tools     : \e[1;94m${#tools[@]}\e[0m"
 echo -e "(i) Total Installed : \e[1;92m${#installed[@]}\e[0m"
 
@@ -71,78 +90,98 @@ fi
 
 echo -e "(i) Total Failed    : $msg"
 
-# Display missing tools (if any) to user
 if [[ "${#tools[@]}" -ne "${#installed[@]}" ]]; then
- echo "Tools Missing :"
+ echo "Tools Missing/Failed:"
  for tool in "${failed[@]}"; do
-  echo -e " [\e[1;92m$tool\e[0m]"
+  echo -e " [\e[1;91m$tool\e[0m]"
  done
 else
- echo -e "(i) \e[1;92mAll tools installed successfully!\e[0m"
+ echo -e "(i) \e[1;92mAll apt tools processed successfully!\e[0m"
 fi
 
+echo ""
+echo "--- 🚀 Starting Custom Installations ---"
+
 # Install ghostty terminal
-if ! command -v ghostty > /dev/null 2>&1; then
+if ! command -v ghostty >/dev/null 2>&1; then
  echo "Installing ghostty..."
+ # Ensure curl is installed before running this
+ sudo apt install curl -y
  curl -fsSL https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh | sh
 fi
 
 # Install Helm
-if ! command -v helm > /dev/null 2>&1; then
+if ! command -v helm >/dev/null 2>&1; then
  echo "Installing helm..."
- curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4 | sh
+ # Changed get-helm-4 to get-helm-3 (standard script)
+ curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+ rm get_helm.sh
 fi
 
-# Install Docker Desktop
-if ! command -v docker > /dev/null 2>&1; then
- #TODO 
- echo "Installing docker [false] :: TODO"
+# Install Docker
+if ! command -v docker >/dev/null 2>&1; then
+ echo "Installing Docker..."
+ curl -fsSL https://get.docker.com | sh
+ # Add current user to docker group so sudo isn't needed
+ sudo usermod -aG docker "$USER"
+ echo "Docker installed. You may need to logout/login for group changes to take effect."
 fi
 
-# Install system monitor (task bar)
-if ! command -v indicator-multiload > /dev/null 2>&1; then
- echo "Installing inidcator-multiload..."
- sudo apt install indicator-multiload
+# Install system monitor
+if ! command -v indicator-multiload >/dev/null 2>&1; then
+ echo "Installing indicator-multiload..."
+ sudo apt install indicator-multiload -y
 fi
 
-# Install tools for increasing toolbar size
-if ! command -v gnome-shell-extension-manager > /dev/null 2>&1; then
+# Install tools for extensions
+if ! command -v gnome-shell-extension-manager >/dev/null 2>&1; then
  echo "Installing gnome-shell-extension-manager..."
- sudo apt install gnome-shell-extension-manager
-fi 
+ sudo apt install gnome-shell-extension-manager -y
+fi
 
 # Install desktop editor
-if ! command -v dconf-editor > /dev/null 2>&1; then
+if ! command -v dconf-editor >/dev/null 2>&1; then
  echo "Installing dconf-editor..."
- sudo apt install dconf-editor
+ sudo apt install dconf-editor -y
 fi
 
-# Install coder 
-if ! command -v code > /dev/null 2>&1; then
- echo "Installing VsCode..."
- curl -fsSL https://code-server.dev/install.sh | sh
+# Install VS Code (Desktop Version)
+if ! command -v code >/dev/null 2>&1; then
+ echo "Installing VS Code (Snap)..."
+ sudo snap install code --classic
 fi
 
-# Install Mission Center
-if ! command -v flatpak > /dev/null 2>&1; then
+# Install Flatpak (Prerequisite for Mission Center)
+if ! command -v flatpak >/dev/null 2>&1; then
  echo "Installing flatpak..."
- sudo apt update && sudo apt install flatpak -y
+ sudo apt install flatpak -y
  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
- 
- echo "Installing MissionCenter..."
- flatpak install flathub io.missioncenter.MissionCenter
 fi
 
-# Install LazyDocker (CLI Manager)
-if ! command -v lazydocker > /dev/null 2>&1; then
- ech "Installing lazydocker..."
+# Install Mission Center (Independent check)
+if ! flatpak list 2>/dev/null | grep -q "io.missioncenter.MissionCenter"; then
+ echo "Installing MissionCenter..."
+ flatpak install flathub io.missioncenter.MissionCenter -y
+else
+ echo "MissionCenter already installed."
+fi
+
+# Install LazyDocker
+if ! command -v lazydocker >/dev/null 2>&1; then
+ echo "Installing lazydocker..."
  curl https://raw.githubusercontent.com/jesseduffield/lazydocker/master/scripts/install_update_linux.sh | bash
 fi
 
-# Start every window in the center
-centered=$(gsettings get org.gnome.mutter center-new-windows)
-
-if [[ "$centered" != "true" || "$centered" -ne 1 ]]; then
- echo "Setting all windows to be centered!"
- gsettings set org.gnome.mutter center-new-windows true
+# Center Windows
+echo "Configuring GNOME Window settings..."
+# We wrap this in a try/catch style because gsettings might fail on headless servers
+if command -v gsettings >/dev/null 2>&1; then
+ centered=$(gsettings get org.gnome.mutter center-new-windows)
+ # Fixed boolean logic check
+ if [[ "$centered" != "'true'" && "$centered" != "true" ]]; then
+  echo "Setting all windows to be centered!"
+  gsettings set org.gnome.mutter center-new-windows true
+ fi
 fi
+
+echo "--- ✨ Setup Complete! ---"
