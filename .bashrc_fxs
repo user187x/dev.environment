@@ -1,13 +1,100 @@
 #!/bin/bash
 
 function clipboard {
+
+ if [[ "$#" -eq 0 ]]; then
+  echo -e " \e[1;92m(i)\e[0m Usage : \e[1;27mclipboard\e[0m \e[93m<file>\e[0m"
+ fi
+
+ if [[ ! -f "$1" ]]; then
+  echo -e " \e[1;91m(!)\e[0m File not found: $1"
+ fi
+
  xclip -selection clipboard $1
  filename=$(basename $1)
- echo -e "\e[3;90m -> File \e[1;92m$filename\e[0m \e[3;90mcontents copied to system clipboard\e[0m"
+
+ echo -e "\e[3;90m File \e[1;92m$filename\e[0m \e[3;90mcontents copied to system clipboard\e[0m"
 }
 
-diff() {
+gdiff() {
  grc diff "$@"
+}
+
+fmt() {
+
+ if [[ "$#" -eq 0 ]]; then
+  echo "Usage : fmt <bash-script>"
+  return 1
+ fi
+
+ script="$1"
+
+ if [[ ! -f "$1" ]]; then
+  echo "File not found: $1"
+  return 1
+ fi
+
+ shfmt -i 1 -w "$1"
+
+ if [[ "$?" -eq 0 ]]; then
+  echo -e " \e[90m(i) Bash Script Formatted:\e[0m \e[1;92m$1\e[0m"
+ else
+  echo -e " \e[1;91m(!)\e[0m Failure formatting script: \e[1;92m$1\e[0m"
+ fi
+}
+# Fuzzy file search
+function fz {
+ local selected_file="$(fzf "$@")"
+
+ if [[ -n "$selected_file" ]]; then
+  # Fix: Do not escape here. It breaks dirname.
+  # selected_file=$(printf "%q" "$selected_file")
+
+  local extension="${selected_file##*.}"
+  local directory=$(dirname "$selected_file")
+
+  # Check system tools
+  local editor="vim"
+  [[ -x /usr/bin/gedit ]] && editor="gedit"
+
+  OPTION=$(whiptail \
+   --title "Fuzzy Search" \
+   --menu "Choose an option:" \
+   15 50 5 \
+   "0" "Open Directory" \
+   "1" "View File Contents" \
+   "2" "Edit with VIM" \
+   "3" "Open with system" \
+   "4" "CD to directory" \
+   "5" "Exit" \
+   3>&1 1>&2 2>&3)
+
+  if [ "$OPTION" == "0" ]; then
+   # Fix: 'open' is macOS. Use xdg-open for Linux
+   xdg-open "$directory" >/dev/null 2>&1
+  elif [ "$OPTION" == "1" ]; then
+   bat "$selected_file"
+  elif [ "$OPTION" == "2" ]; then
+   sudo vim "$selected_file"
+  elif [ "$OPTION" == "3" ]; then
+   if [[ "$extension" == "mp3" ]]; then
+    echo "Listening to : $selected_file"
+    mpv --no-video "$selected_file" >/dev/null 2>&1
+   else
+    # Fallback to system default
+    xdg-open "$selected_file" >/dev/null 2>&1
+   fi
+  elif [ "$OPTION" == "4" ]; then
+   echo
+   echo -e "Changing directory [\e[1;92m$directory\e[0m]"
+   cd "$directory"
+   ls -alt "$directory"
+   echo
+  else
+   return
+  fi
+  echo -e "\e[3;90mSelected File: \e[3;92m$selected_file\e[0m"
+ fi
 }
 
 fz() {
@@ -58,12 +145,226 @@ fz() {
   else
    return 0
   fi
-  
+
   if [[ "$option" == "4" ]]; then
    echo -e "\e[3;90m At Directory: \e[3;92m$selected_file\e[0m"
   else
    echo -e "\e[3;90mSelected File: \e[3;92m$selected_file\e[0m"
   fi
 
+ fi
+}
+
+function qr-code {
+ if [[ -z "$1" ]]; then
+  read -p "Text to convert : " text
+ else
+  text="$1"
+ fi
+
+ local export_filename=""
+ local export_dir=""
+ local file_ext=".png"
+
+ read -e -r -p "Save location (path/to/file): " export_path
+
+ # Fix: Handle directory vs filename logic
+ if [[ -d "$export_path" ]]; then
+  export_dir="${export_path%/}" # remove trailing slash
+  export_filename="qr_code"
+ else
+  export_dir=$(dirname "$export_path")
+  export_filename=$(basename "$export_path")
+ fi
+
+ # Fix: Typo UFT8 -> UTF8, added missing slash in path
+ echo "Saving to ${export_dir}/${export_filename}-1${file_ext}..."
+ qrencode -m 2 -s 1 -o "${export_dir}/${export_filename}-1${file_ext}" "$text"
+
+ echo "Generating terminal preview..."
+ qrencode -m 2 -s 1 -t UTF8 -l L "$text"
+
+ # Second variation
+ qrencode -m 2 -s 1 -t UTF8 --foreground="3599FE" --background="FFFFFF" -o "${export_dir}/${export_filename}-2${file_ext}" -l L "$text"
+ echo "Saved QR file 2"
+
+ # Terminal preview 2
+ qrencode -m 2 -s 1 --foreground="3599FE" --background="FFFFFF" -t UTF8 -l L "$text"
+ echo
+}
+
+export -f qr-code
+
+function image-to-asci {
+ if [[ -f "$1" ]]; then
+  jp2a -i --chars="XxxVO" "$1"
+ else
+  echo "File not found [$1]"
+ fi
+}
+
+export -f image-to-asci
+
+function convert-image {
+ if [[ -f "$1" ]]; then
+  # Fix: Ensure output argument is passed
+  if [[ -z "$2" ]]; then
+   echo "Usage: convert-image <input> <output>"
+   return 1
+  fi
+  convert "$1" -quality 100 "$2"
+ else
+  echo "File not found [$1]"
+ fi
+}
+export -f convert-image
+
+function alert {
+
+ local last_exit_status=$?
+
+ local icon_name="terminal"
+ if [ "$last_exit_status" -ne 0 ]; then
+  icon_name="error"
+ fi
+
+ local msg
+ msg=$(history | tail -n1 | sed -e 's/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//')
+
+ notify-send --urgency=low -i "$icon_name" "$msg"
+}
+
+############################################
+# TERMINAL FUNCTIONS
+############################################
+
+# Make the terminal change colors
+update_dynamic_prompt() {
+ local EXIT_CODE=$?
+
+ local RED="\[\e[38;5;196m\]"
+ local GREEN="\[\e[38;5;84m\]"
+ local YELLOW="\[\e[0;33m\]"
+ local BLUE="\[\e[0;34m\]"
+ local MAGENTA="\[\e[0;35m\]"
+ local CYAN="\[\e[0;36m\]"
+ local NC="\[\e[0m\]"
+
+ local PALETTE=("$RED" "$YELLOW" "$GREEN" "$CYAN" "$BLUE" "$MAGENTA")
+ # Fix: Ensure arithmetic evaluation is robust
+ local idx=$(($(date +%-S) % ${#PALETTE[@]}))
+ local COLOR="${PALETTE[$idx]}"
+
+ if [[ "$EXIT_CODE" -eq 0 ]]; then
+  PS1="${GREEN} ➤  ${NC}"
+ else
+  PS1="${RED} ➤💥  ${NC}"
+ fi
+}
+
+############################################
+# SOUND FUNCTIONS
+############################################
+
+# Closing Sound
+function exit_sound {
+ if [[ -f "/opt/audio/twirp.mp3" ]] && command -v mpv >/dev/null; then
+  nohup mpv --no-video /opt/audio/twirp.mp3 >/dev/null 2>&1 &
+  disown
+ fi
+}
+
+################################################
+# SYSTEM FUNCTIONS                             #
+################################################
+
+# House cleaning
+function clean {
+ sudo apt clean
+ sudo apt autoclean
+ sudo apt remove -y
+ sudo apt autoremove -y
+ echo -e "\e[1;92mCleanup Complete\e[0m\n"
+}
+export -f clean
+
+# Function to update & clean up after
+function update {
+ sudo apt-get update
+ sudo apt update && sudo apt upgrade -y
+ echo -e "\e[1;92mUpdate Complete!\e[0m"
+ clean
+}
+export -f update
+
+# Overrides (Requires 'grc' installed)
+if command -v grc >/dev/null; then
+ function netstat { grc sudo netstat "$@"; }
+ function diff { grc diff "$@"; }
+ function ping { grc ping "$@"; }
+ function head { grc head "$@"; }
+ function tail { grc tail "$@"; }
+ function mount { grc mount "$@"; }
+ function ps { grc sudo ps "$@"; }
+fi
+
+function prettyJson {
+ local input="$1"
+ if [[ -f "$input" ]]; then
+  cat "$input" | jq -C . | less -R
+ else
+  echo "$input" | jq '.'
+ fi
+}
+export -f prettyJson
+
+function spin {
+ local message="$1"
+ local delay=0.2
+ local spinner="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+ local i=0
+ while true; do
+  printf "\r%s \033[36m%s\033[0m" "$message" "${spinner:$((i++ % ${#spinner})):1}"
+  sleep "$delay"
+ done
+}
+export -f spin
+
+function play {
+ if [[ -f "$1" ]]; then
+  mpv --no-video "$1"
+ elif [[ -d "$1" ]]; then
+  media_files=()
+  while IFS= read -r file; do
+   media_files+=("$file")
+  done < <(find "$1" -type f -iname "*.mp3")
+
+  if [[ "${#media_files[@]}" -ne 0 ]]; then
+   echo "Found ${#media_files[@]} MP3s"
+   mpv "${media_files[@]}"
+  fi
+ else
+  echo "Usage : play <filePath|dirPath>"
+ fi
+}
+export -f play
+
+# Mirro function for different name
+function mp3 { play "$@"; }
+export -f mp3
+
+function search {
+ local selected_line=$(rg --color=always \
+  --line-number \
+  --no-heading "$1" |
+  fzf --ansi \
+   --delimiter=: --nth=1,3.. \
+   --preview 'bat --style=numbers --color=always {1} --highlight-line {2} || cat {1}')
+
+ local file_path=$(echo "$selected_line" | cut -d: -f1)
+
+ if [[ -n "$file_path" ]]; then
+  echo "Selected file : $file_path"
+  vim "$file_path"
  fi
 }

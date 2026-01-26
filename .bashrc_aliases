@@ -6,13 +6,13 @@
 
 # enable color support of ls and also add handy aliases
 if [ -x /usr/bin/dircolors ]; then
-  test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
-  alias ls='ls --color=auto'
-  alias dir='dir --color=auto'
-  alias vdir='vdir --color=auto'
-  alias grep='grep --color=auto'
-  alias fgrep='fgrep --color=auto'
-  alias egrep='egrep --color=auto'
+ test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+ alias ls='ls --color=auto'
+ alias dir='dir --color=auto'
+ alias vdir='vdir --color=auto'
+ alias grep='grep --color=auto'
+ alias fgrep='fgrep --color=auto'
+ alias egrep='egrep --color=auto'
 fi
 
 # system tool aliases
@@ -23,7 +23,7 @@ alias l='ls -CF'
 # dev tool alias
 
 # Ubuntu-isms
-if command -v batcat > /dev/null 2>&1; then
+if command -v batcat >/dev/null 2>&1; then
  batcmd="batcat"
 else
  batmcd="bat"
@@ -34,12 +34,12 @@ alias bat="$batcmd --style=full"
 # Project Navigation
 cnc_path="$HOME/Projects/dev.environment"
 if [[ -d "$cnc_path" ]]; then
-  alias denv="cd $cnc_path"
+ alias denv="cd $cnc_path"
 else
-  # Only echo warning if interactive
-  if [[ $- == *i* ]]; then
-    echo "Setup your CNC project to initialize properly: $cnc_path missing."
-  fi
+ # Only echo warning if interactive
+ if [[ $- == *i* ]]; then
+  echo "Setup your CNC project to initialize properly: $cnc_path missing."
+ fi
 fi
 
 # kubernetes aliases
