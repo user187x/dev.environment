@@ -67,8 +67,8 @@ if [ -f ~/.bashrc_functions ]; then
 fi
 
 # Source Aliases
-if [ -f ~/.bashrc_alias ]; then
- . ~/.bashrc_alias
+if [ -f ~/.bashrc_aliases ]; then
+ . ~/.bashrc_aliases
 fi
 
 ############################################

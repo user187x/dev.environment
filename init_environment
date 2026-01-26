@@ -147,6 +147,29 @@ function initialize() {
   safe_execute "ln -s \"$SCRIPT_DIR/.bashrc\" \"$HOME/.bashrc\""
  fi
 
+ if [[ -L "$HOME/.bashrc_aliases" ]]; then
+  log "ℹ️  .bashrc_aliases is already a symlink. Skipping."
+ else
+  log "📦 Backing up existing ~/.bashrc_aliases to $BACKUP_PATH"
+  safe_execute "tar -cf \"$BACKUP_PATH\" \"$HOME/.bashrc_aliases\" 2>/dev/null || true"
+
+  log "Replacing existing bashrc_aliases..."
+  safe_execute "rm -f \"$HOME/.bashrc_aliases\""
+  safe_execute "ln -s \"$SCRIPT_DIR/.bashrc_aliases\" \"$HOME/.bashrc_aliases\""
+ fi
+
+ if [[ -L "$HOME/.bashrc_functions" ]]; then
+  log "ℹ️  .bashrc_functions is already a symlink. Skipping."
+ else
+  log "📦 Backing up existing ~/.bashrc_functions to $BACKUP_PATH"
+  safe_execute "tar -cf \"$BACKUP_PATH\" \"$HOME/.bashrc_functions\" 2>/dev/null || true"
+
+  log "Replacing existing bashrc_functions..."
+  safe_execute "rm -f \"$HOME/.bashrc_functions\""
+  safe_execute "ln -s \"$SCRIPT_DIR/.bashrc_functions\" \"$HOME/.bashrc_functions\""
+ fi
+
+
  # --- Tmux Config Handling ---
  local possible_paths=("$HOME/.config/tmux" "$HOME/.tmux" "$HOME/.tmux.conf")
 
@@ -171,7 +194,7 @@ function initialize() {
  install_font
 
  # --- Sourcing files ---
- local aux_files=(".bash-tools" ".bash-aliases" ".bash-functions")
+ local aux_files=(".bashrc_packages" ".bashrc_aliases" ".bashrc_functions")
  for file in "${aux_files[@]}"; do
   if [[ -f "$SCRIPT_DIR/$file" ]]; then
    if [[ "$DRY_RUN" == "true" ]]; then
