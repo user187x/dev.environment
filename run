@@ -1,13 +1,19 @@
 #!/bin/bash
 
-# --- 1. Safety & Strict Mode ---
+#Safety & Strict Mode
 set -uo pipefail
 
-# --- Global Variables ---
+# Create temp directory
+SCRATCH_SPACE="/tmp/dev-env"
+if [[ ! -f "$SCRATCH_SPACE" ]]; then
+ mkdir -p "/tmp/dev-env" > /dev/null 2>&1
+fi
+
+#Global Variables
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_PATH="$HOME/env-backup-${TIMESTAMP}.tar"
+BACKUP_PATH="$SCRATCH_SPACE/env-backup-${TIMESTAMP}.tar"
 TMUX_CONFIG_DIR="$HOME/.config/tmux"
-LOG_FILE="$HOME/dev-init-${TIMESTAMP}.log"
+LOG_FILE="$SCRATCH_SPACE/dev-init-${TIMESTAMP}.log"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Global Flag for Dry Run (Default to false)
@@ -65,7 +71,7 @@ function install_font() {
  fi
 
  echo
- log "💾 Installing Fonts..."
+ log "💾  Installing Fonts..."
 
  # Ensure destination directory exits
  log "⚙️  [DRY RUN] Creating directory $dest_path"
@@ -74,7 +80,7 @@ function install_font() {
  # In dry run, we skip the interactive prompts to automate the test flow
  if [[ "$DRY_RUN" == "true" ]]; then
   for font in "$src_path"/*; do
-   log "⚙️  [DRY RUN] Copying font $font to $dest_path"
+   log "📁  [DRY RUN] Copying font $font to $dest_path"
   done
   log "⚙️  [DRY RUN] Executting command fc-cache -f"
   return 0
@@ -88,7 +94,7 @@ function install_font() {
 
 function tmux_fix() {
 
- log "⟳  Initializing Tmux..."
+ log "⟳   Initializing Tmux..."
  echo
 
  local TPM_DIR="$TMUX_CONFIG_DIR/plugins/tpm"
@@ -122,18 +128,18 @@ function tmux_fix() {
   log "💾 Installing TPM from remote (GitHub)..."
   safe_execute "git clone https://github.com/tmux-plugins/tpm \"$TPM_DIR\""
  else
-  log "👍 TPM is already installed locally: $TMUX_CONFIG_DIR."
+  log "👍  TPM already installed: $TMUX_CONFIG_DIR."
  fi
 
  # TPM requires plugin scripts (*.tmux) to be executable to auto-load.
  # Copied files often lose this attribute.
  if [[ -d "$PLUGINS_DIR" ]]; then
-  log "🔧 Restoring executable permissions for offline plugins..."
+  log "🛂  Setting executable permissions for plugins..."
   safe_execute "chmod -R 755 \"$PLUGINS_DIR\""
  fi
 
  if [[ -x "$TPM_DIR/bin/install_plugins" ]]; then
-  log "💾 Installing plugins..."
+  log "💾  Installing plugins..."
   safe_execute "\"$TPM_DIR/bin/install_plugins\" >/dev/null 2>&1"
  fi
 }
@@ -141,7 +147,7 @@ function tmux_fix() {
 function initialize() {
  echo
  echo "=========================================="
- log "❯❯❯❯ Initializing Dev Environment ❯❯❯❯"
+ log "❯❯❯❯  Initializing Dev Environment    ❯❯❯❯"
  echo "=========================================="
  echo
  check_dependencies
@@ -159,10 +165,10 @@ function initialize() {
  if [[ -L "$HOME/.bashrc" ]]; then
   log "🛈︎  .bashrc is already a symlink. Skipping."
  else
-  log "📦 Backing up existing ~/.bashrc to $BACKUP_PATH"
+  log "⛃ Backing up existing ~/.bashrc to $BACKUP_PATH"
   safe_execute "tar -cf \"$BACKUP_PATH\" \"$HOME/.bashrc\" 2>/dev/null || true"
 
-  log "Replacing existing bashrc..."
+  log "🗑️  Removing existing bashrc..."
   safe_execute "rm -f \"$HOME/.bashrc\""
   safe_execute "ln -s \"$SCRIPT_DIR/.bashrc\" \"$HOME/.bashrc\""
  fi
@@ -170,10 +176,10 @@ function initialize() {
  if [[ -L "$HOME/.bashrc_aliases" ]]; then
   log "🛈︎  .bashrc_aliases is already a symlink. Skipping."
  else
-  log "📦 Backing up existing ~/.bashrc_aliases to $BACKUP_PATH"
+  log "⛃ Backing up existing ~/.bashrc_aliases to $BACKUP_PATH"
   safe_execute "tar -cf \"$BACKUP_PATH\" \"$HOME/.bashrc_aliases\" 2>/dev/null || true"
 
-  log "Replacing existing bashrc_aliases..."
+  log "🗑️  Removing existing bashrc_aliases..."
   safe_execute "rm -f \"$HOME/.bashrc_aliases\""
   safe_execute "ln -s \"$SCRIPT_DIR/.bashrc_aliases\" \"$HOME/.bashrc_aliases\""
  fi
@@ -181,10 +187,10 @@ function initialize() {
  if [[ -L "$HOME/.bashrc_functions" ]]; then
   log "🛈︎  .bashrc_functions is already a symlink. Skipping."
  else
-  log "📦 Backing up existing ~/.bashrc_functions to $BACKUP_PATH"
+  log "⛃ Backing up existing ~/.bashrc_functions to $BACKUP_PATH"
   safe_execute "tar -cf \"$BACKUP_PATH\" \"$HOME/.bashrc_functions\" 2>/dev/null || true"
 
-  log "Replacing existing bashrc_functions..."
+  log "🗑️  Removing existing bashrc_functions..."
   safe_execute "rm -f \"$HOME/.bashrc_functions\""
   safe_execute "ln -s \"$SCRIPT_DIR/.bashrc_functions\" \"$HOME/.bashrc_functions\""
  fi
@@ -194,7 +200,7 @@ function initialize() {
 
  for possible in "${possible_paths[@]}"; do
   if [[ -e "$possible" ]]; then
-   log "🔎 Found existing config: $possible. Backing up..."
+   log "🔎  Found existing config: $possible. Backing up..."
    safe_execute "tar -rf \"$BACKUP_PATH\" \"$possible\" 2>/dev/null"
    safe_execute "rm -rf \"$possible\""
   fi
@@ -202,11 +208,11 @@ function initialize() {
 
  safe_execute "mkdir -p \"$TMUX_CONFIG_DIR\""
 
- log "📂 Copying new tmux configuration..."
+ log "📂  Copying new tmux configuration..."
  if [[ -d "$SCRIPT_DIR/.config/tmux" ]]; then
   safe_execute "cp -rf \"$SCRIPT_DIR/.config/tmux/.\" \"$TMUX_CONFIG_DIR/\""
  else
-  log "⚠️  Warning: Source config directory '$SCRIPT_DIR/.config/tmux' not found."
+  log "⚠️   Warning: Source config directory '$SCRIPT_DIR/.config/tmux' not found."
  fi
 
  tmux_fix
@@ -217,7 +223,7 @@ function initialize() {
  for file in "${aux_files[@]}"; do
   if [[ -f "$SCRIPT_DIR/$file" ]]; then
    if [[ "$DRY_RUN" == "true" ]]; then
-    log "⚙️  [DRY RUN] Source: $SCRIPT_DIR/$file"
+    log "🪄  [DRY RUN] Source: $SCRIPT_DIR/$file"
    else
     # shellcheck disable=SC1090
     source "$SCRIPT_DIR/$file"
@@ -225,7 +231,7 @@ function initialize() {
   fi
  done
 
- log "✨ Environment Initialized Successfully!"
+ log "👍  Environment Initialized Successfully!"
 
  if [[ "$DRY_RUN" == "true" ]]; then
   log "⚙️  [DRY RUN] Execute: tmux -f $TMUX_CONFIG_DIR/tmux.conf"
@@ -241,12 +247,8 @@ function initialize() {
 # --- THE REQUESTED DRY-RUN FUNCTION ---
 function start_dry_run() {
  echo "=========================================="
- echo " 🚧 ENTERING DRY-RUN MODE 🚧"
+ echo "🚧       STARTING DRY-RUN MODE          🚧"
  echo "=========================================="
- echo "No files will be modified. No commands will be executed."
- echo "Dependencies will be checked but not enforced."
- echo "Interactive prompts will be skipped."
- echo ""
 
  # 1. Set the global flag
  DRY_RUN="true"
@@ -254,10 +256,10 @@ function start_dry_run() {
  # 2. Invoke the standard main logic
  # Because DRY_RUN is true, 'safe_execute' will intercept commands
  initialize
-
+ 
  echo
  echo "=========================================="
- echo "❯❯❯❯ DRY-RUN COMPLETE ❯❯❯❯"
+ echo "🏁       DRY-RUN MODE COMPLETE          🏁"
  echo "=========================================="
 }
 
