@@ -56,7 +56,7 @@ fmt() {
  fi
 
  if command -v shfmt >/dev/null; then
-  shfmt -i 2 -w "$script" # Changed indent to 2 (standard)
+  shfmt -i 1 -w "$script"
   if [[ "$?" -eq 0 ]]; then
    echo -e " ${M}(i) Bash Script Formatted:${NC} ${G}$script${NC}"
   else
@@ -201,7 +201,7 @@ convert-image() {
 }
 export -f convert-image
 
-alert() {
+function alert {
  local last_exit_status=$?
  local icon_name="terminal"
  local msg
@@ -345,7 +345,8 @@ search() {
   --line-number \
   --no-heading "$1" |
   fzf --ansi \
-   --delimiter=: --nth=1,3.. \
+   --delimiter=: \
+   --nth=1,3.. \
    --preview 'bat --style=numbers --color=always {1} --highlight-line {2} || cat {1}')
 
  local file_path

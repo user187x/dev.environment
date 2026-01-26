@@ -13,26 +13,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Global Flag for Dry Run (Default to false)
 DRY_RUN="false"
 
-# --- Helper Functions ---
-
+# --- Helper Function ---
 function log() {
  echo -e "$@" | tee -a "$LOG_FILE"
 }
 
+# --- Helper Function ---
 function error_exit() {
  log "❌ Critical Error: $1"
  exit 1
 }
 
-# --- 🧱 CORE DRY-RUN LOGIC ---
-# This function wraps all destructive commands.
-# If DRY_RUN is true, it just prints the command.
 # If DRY_RUN is false, it executes it using eval (to handle pipes/redirects).
 function safe_execute() {
  local cmd="$*"
 
  if [[ "$DRY_RUN" == "true" ]]; then
-  log "🧱 [DRY RUN] Would execute: $cmd"
+  log "⚙️  [DRY RUN] Execute: $cmd"
   return 0 # Always return success in dry run so the script continues
  else
   # specific check for 'exec' which replaces the shell
@@ -60,53 +57,49 @@ function check_dependencies() {
 
 function install_font() {
 
-  local font_path
+ local src_path="$SCRIPT_DIR/fonts"
+ local dest_path="$HOME/.local/share/fonts"
 
-  if [[ -f "$1" ]]; then 
-   font_path="$1"
-  fi
+ if [[ -f "$1" ]]; then
+  src_path="$1"
+ fi
 
-  log "--- 🅰️  Font Installation ---"
+ echo
+ log "💾 Installing Fonts..."
 
-  # In dry run, we skip the interactive prompts to automate the test flow
-  if [[ "$DRY_RUN" == "true" ]]; then
-   log "🧱 [DRY RUN] Skipping interactive font prompts."
-   log "🧱 [DRY RUN] Would extract font to $HOME/.fonts and run fc-cache -f"
-   return 0
-  fi
+ # Ensure destination directory exits
+ log "⚙️  [DRY RUN] Creating directory $dest_path"
+ mkdir -p "$dest_path"
 
-  if [[ -z "$font_path" ]]; then
-   while true; do
-    read -e -r -p "Enter font file path: " font_path
-    if [[ -f "$font_path" ]]; then
-     break 
-    fi
-   done
-  fi
-  
- safe_execute "mkdir -p \"$HOME/.fonts\" >/dev/null 2>&1"
- safe_execute "unzip \"$font_path\" -d \"$HOME/.fonts\""
+ # In dry run, we skip the interactive prompts to automate the test flow
+ if [[ "$DRY_RUN" == "true" ]]; then
+  for font in "$src_path"/*; do
+   log "⚙️  [DRY RUN] Copying font $font to $dest_path"
+  done
+  log "⚙️  [DRY RUN] Executting command fc-cache -f"
+  return 0
+ fi
 
-  log "Rebuilding font cache..."
-  safe_execute "fc-cache -f"
+ safe_execute "cp -a \"$src_path/.\" \"$dest_path\""
+ 
+ log "Rebuilding font cache..."
+ safe_execute "fc-cache -f"
 }
 
 function tmux_fix() {
 
- log "--- 🛠️  Initializing Tmux ---"
+ log "⟳  Initializing Tmux..."
+ echo
+
  local TPM_DIR="$TMUX_CONFIG_DIR/plugins/tpm"
  local PLUGINS_DIR="$TMUX_CONFIG_DIR/plugins"
 
- # 🟢 DYNAMIC PATH GENERATION
- # We write the valid plugin path to a hidden file in $HOME.
- # Your tmux.conf will read this file to find TPM, regardless of where it is installed.
- 
- log "📍 Saving plugin path to $TMUX_CONFIG_DIR/.tmux_meta"
- echo "$PLUGINS_DIR" > "$TMUX_CONFIG_DIR/.tmux_meta"
+ log "🗄️  Saving plugin path to $TMUX_CONFIG_DIR/.tmux_meta"
+ echo "$PLUGINS_DIR" >"$TMUX_CONFIG_DIR/.tmux_meta"
 
  if pgrep -x "tmux" >/dev/null; then
   if [[ "$DRY_RUN" == "true" ]]; then
-   log "🧱 [DRY RUN] Would prompt to kill existing Tmux server."
+   log "⚙️  [DRY RUN] Kill Tmux server."
   else
    log "⚠️  A Tmux server is currently running."
    read -r -p "Kill existing Tmux server to apply changes? (y/n): " kill_ans
@@ -118,17 +111,18 @@ function tmux_fix() {
 
  # Dracula caches status bar scripts in /tmp. If you change configs or move files
  # without clearing this, it will load the old (or default) state, ignoring your settings.
- log "🧹 Clearing Tmux/Dracula temporary caches..."
+ log "🗑️  Clearing Tmux/Dracula temporary caches..."
+ echo
  safe_execute "rm -rf /tmp/tmux-dracula*" 2>/dev/null
  safe_execute "rm -rf /tmp/tmux-*" 2>/dev/null
 
  safe_execute "mkdir -p \"$TMUX_CONFIG_DIR\""
 
  if [[ ! -d "$TPM_DIR" ]]; then
-  log "⬇️  Installing TPM from remote (GitHub)..."
+  log "💾 Installing TPM from remote (GitHub)..."
   safe_execute "git clone https://github.com/tmux-plugins/tpm \"$TPM_DIR\""
  else
-  log "✅ TPM is already installed (Local/Offline)."
+  log "👍 TPM is already installed locally: $TMUX_CONFIG_DIR."
  fi
 
  # TPM requires plugin scripts (*.tmux) to be executable to auto-load.
@@ -139,14 +133,17 @@ function tmux_fix() {
  fi
 
  if [[ -x "$TPM_DIR/bin/install_plugins" ]]; then
-  log "⬇️  Installing/Loading plugins..."
+  log "💾 Installing plugins..."
   safe_execute "\"$TPM_DIR/bin/install_plugins\" >/dev/null 2>&1"
  fi
 }
 
 function initialize() {
- log "--- 🚀 Initializing Dev Environment ---"
-
+ echo
+ echo "=========================================="
+ log "❯❯❯❯ Initializing Dev Environment ❯❯❯❯"
+ echo "=========================================="
+ echo
  check_dependencies
 
  # Skip prompt in dry run
@@ -160,7 +157,7 @@ function initialize() {
 
  # --- Bashrc Handling ---
  if [[ -L "$HOME/.bashrc" ]]; then
-  log "ℹ️  .bashrc is already a symlink. Skipping."
+  log "🛈︎  .bashrc is already a symlink. Skipping."
  else
   log "📦 Backing up existing ~/.bashrc to $BACKUP_PATH"
   safe_execute "tar -cf \"$BACKUP_PATH\" \"$HOME/.bashrc\" 2>/dev/null || true"
@@ -171,7 +168,7 @@ function initialize() {
  fi
 
  if [[ -L "$HOME/.bashrc_aliases" ]]; then
-  log "ℹ️  .bashrc_aliases is already a symlink. Skipping."
+  log "🛈︎  .bashrc_aliases is already a symlink. Skipping."
  else
   log "📦 Backing up existing ~/.bashrc_aliases to $BACKUP_PATH"
   safe_execute "tar -cf \"$BACKUP_PATH\" \"$HOME/.bashrc_aliases\" 2>/dev/null || true"
@@ -182,7 +179,7 @@ function initialize() {
  fi
 
  if [[ -L "$HOME/.bashrc_functions" ]]; then
-  log "ℹ️  .bashrc_functions is already a symlink. Skipping."
+  log "🛈︎  .bashrc_functions is already a symlink. Skipping."
  else
   log "📦 Backing up existing ~/.bashrc_functions to $BACKUP_PATH"
   safe_execute "tar -cf \"$BACKUP_PATH\" \"$HOME/.bashrc_functions\" 2>/dev/null || true"
@@ -192,13 +189,12 @@ function initialize() {
   safe_execute "ln -s \"$SCRIPT_DIR/.bashrc_functions\" \"$HOME/.bashrc_functions\""
  fi
 
-
  # --- Tmux Config Handling ---
  local possible_paths=("$HOME/.config/tmux" "$HOME/.tmux" "$HOME/.tmux.conf")
 
  for possible in "${possible_paths[@]}"; do
   if [[ -e "$possible" ]]; then
-   log "📦 Found existing config: $possible. Backing up..."
+   log "🔎 Found existing config: $possible. Backing up..."
    safe_execute "tar -rf \"$BACKUP_PATH\" \"$possible\" 2>/dev/null"
    safe_execute "rm -rf \"$possible\""
   fi
@@ -221,7 +217,7 @@ function initialize() {
  for file in "${aux_files[@]}"; do
   if [[ -f "$SCRIPT_DIR/$file" ]]; then
    if [[ "$DRY_RUN" == "true" ]]; then
-    log "🧱 [DRY RUN] Would source: $SCRIPT_DIR/$file"
+    log "⚙️  [DRY RUN] Source: $SCRIPT_DIR/$file"
    else
     # shellcheck disable=SC1090
     source "$SCRIPT_DIR/$file"
@@ -232,7 +228,7 @@ function initialize() {
  log "✨ Environment Initialized Successfully!"
 
  if [[ "$DRY_RUN" == "true" ]]; then
-  log "🧱 [DRY RUN] Would exec: tmux -f $TMUX_CONFIG_DIR/tmux.conf"
+  log "⚙️  [DRY RUN] Execute: tmux -f $TMUX_CONFIG_DIR/tmux.conf"
  else
   if [[ -z "${TMUX:-}" ]]; then
    exec tmux -f "$TMUX_CONFIG_DIR/tmux.conf"
@@ -245,7 +241,7 @@ function initialize() {
 # --- THE REQUESTED DRY-RUN FUNCTION ---
 function start_dry_run() {
  echo "=========================================="
- echo "🧱  ENTERING DRY-RUN MODE"
+ echo " 🚧 ENTERING DRY-RUN MODE 🚧"
  echo "=========================================="
  echo "No files will be modified. No commands will be executed."
  echo "Dependencies will be checked but not enforced."
@@ -259,9 +255,9 @@ function start_dry_run() {
  # Because DRY_RUN is true, 'safe_execute' will intercept commands
  initialize
 
- echo ""
+ echo
  echo "=========================================="
- echo "✅  DRY-RUN COMPLETE"
+ echo "❯❯❯❯ DRY-RUN COMPLETE ❯❯❯❯"
  echo "=========================================="
 }
 
