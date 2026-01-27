@@ -74,7 +74,7 @@ function install_font() {
  log "💾  Installing Fonts..."
 
  # Ensure destination directory exits
- log "⚙️  [DRY RUN] Creating directory $dest_path"
+ log "⚙️   Creating directory $dest_path"
  mkdir -p "$dest_path"
 
  # In dry run, we skip the interactive prompts to automate the test flow

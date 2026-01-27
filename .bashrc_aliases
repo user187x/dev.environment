@@ -21,6 +21,15 @@ alias la='ls -A'
 alias l='ls -CF'
 
 # dev tool alias
+alias t="tmux"
+
+tmux_conf="$HOME/.config/tmux/tmux.conf"
+if [[ -f "$tmux_conf" ]]; then
+ alias source-t="tmux source-file $tmux_conf"
+else
+ alias source-t="tmux source-file"
+fi
+
 if command -v batcat >/dev/null 2>&1; then
  batcmd="batcat"
 else

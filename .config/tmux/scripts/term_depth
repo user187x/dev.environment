@@ -1,7 +1,15 @@
 #!/bin/bash
 
-# $1 is the Pane PID passed from tmux
+# $1 = Pane PID (from tmux)
+# $2 = Current Path (passed from tmux so we can include it in the output)
 CURRENT_PID=$1
+CURRENT_PATH=$2
+
+# --- CONFIG: Colors (Dracula Theme) ---
+# You can change these hex codes to whatever you prefer.
+# #50fa7b = Green, #ff79c6 = Pink, #8be9fd = Cyan, #f8f8f2 = White
+VAL_COLOR="#[fg=#f8f8f2]"
+RESET_COLOR="#[fg=default]"
 
 # Validation
 if [ -z "$CURRENT_PID" ]; then exit 0; fi
@@ -9,7 +17,6 @@ if [ -z "$CURRENT_PID" ]; then exit 0; fi
 # --- FUNCTION: Recursive Child Finder ---
 find_deepest_child() {
  local parent=$1
- # -n: select the newest (most recently started) child
  local child=$(pgrep -P "$parent" -n)
 
  if [ -z "$child" ]; then
@@ -20,21 +27,29 @@ find_deepest_child() {
 }
 # ----------------------------------------
 
-# 1. Attempt to find the deepest active process
+# 1. Find the Deepest Active Process (The Leaf)
 LEAF_PID=$(find_deepest_child "$CURRENT_PID")
 
-# 2. Try to generate the tree for this child.
-#    2>/dev/null hides errors if the PID is already dead.
+# 2. Get the USER who owns this specific process
+#    -o user= : prints just the username
+#    awk : trims any whitespace
+LEAF_USER=$(ps -o user= -p "$LEAF_PID" | awk '{print $1}')
+
+# 3. Generate the Tree (with fallback for race conditions)
 TREE_OUTPUT=$(pstree -p -A -s "$LEAF_PID" 2>/dev/null | head -n 1)
 
-# 3. FALLBACK: If the child died (output is empty), use the original Pane PID.
-#    This prevents the "disappearing" text issue.
 if [ -z "$TREE_OUTPUT" ]; then
  LEAF_PID=$CURRENT_PID
+ # Fallback: if child died, use parent PID and parent User
+ LEAF_USER=$(ps -o user= -p "$LEAF_PID" | awk '{print $1}')
  TREE_OUTPUT=$(pstree -p -A -s "$LEAF_PID" | head -n 1)
 fi
 
-# 4. Format the output
-#    We echo the captured variable into sed.
-echo "$TREE_OUTPUT" |
- sed "s/($LEAF_PID).*/($LEAF_PID)/; s/([0-9]*)//g; s/---/ ➤ /g; s/ ➤ -/ ➤ /g; s/^systemd ➤ systemd ➤ //; s/tmux: server/tmux/"
+# 4. Clean up the tree visual
+CLEAN_TREE=$(echo "$TREE_OUTPUT" |
+ sed "s/($LEAF_PID).*/($LEAF_PID)/; s/([0-9]*)//g; s/---/ ➤ /g; s/ ➤ -/ ➤ /g; s/^systemd ➤ systemd ➤ //; s/tmux: server/tmux/")
+
+# 5. Output the FULL Format
+#    We combine User, Path, and Tree here so they update atomically
+#echo "User [$LEAF_USER] Path [$CURRENT_PATH] Tree [$CLEAN_TREE]"
+echo "User [${VAL_COLOR}${LEAF_USER}${RESET_COLOR}] Path [${VAL_COLOR}${CURRENT_PATH}${RESET_COLOR}] Hierarchy [${VAL_COLOR}${CLEAN_TREE}${RESET_COLOR}]"
