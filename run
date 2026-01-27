@@ -18,6 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Global Flag for Dry Run (Default to false)
 DRY_RUN="false"
+ENABLE_OS_MODS="false"
 
 # --- Helper Function ---
 function log() {
@@ -82,7 +83,7 @@ function install_font() {
   for font in "$src_path"/*; do
    log "📁  [DRY RUN] Copying font $font to $dest_path"
   done
-  log "⚙️  [DRY RUN] Executing command fc-cache -f"
+  log "⚙️   [DRY RUN] Executing command fc-cache -f"
   return 0
  fi
 
@@ -267,16 +268,34 @@ function initialize() {
   fi
  done
 
+ if [[ "$DRY_RUN" == "true" ]]; then
+  log "⚙️   [DRY RUN] Execute: cp -rf \"$SCRIPT_DIR/os-mods/audio\" \"/opt/audio/\""
+ else
+ if [[ "$ENABLE_OS_MODS" == "true" ]]; then
+  include_os_mods
+ fi
+ fi
+
  log "👍  Environment Initialized Successfully!"
 
  if [[ "$DRY_RUN" == "true" ]]; then
-  log "⚙️  [DRY RUN] Execute: tmux -f $TMUX_CONFIG_DIR/tmux.conf"
+  log "⚙️   [DRY RUN] Execute: tmux -f $TMUX_CONFIG_DIR/tmux.conf"
  else
   if [[ -z "${TMUX:-}" ]]; then
    exec tmux -f "$TMUX_CONFIG_DIR/tmux.conf"
   else
    tmux source-file "$TMUX_CONFIG_DIR/tmux.conf"
   fi
+ fi
+}
+
+function includ_os_mods () {
+
+ log "📂  Copying new tmux configuration..."
+ if [[ -d "$SCRIPT_DIR/os-modos-mods" ]]; then
+  safe_execute "cp -rf \"$SCRIPT_DIR/os-mods/media/audio\" \"/opt/audio/\""
+ else
+  log "⚠️   Warning: Source config directory '$SCRIPT_DIR/os-mods/media/audio' not found."
  fi
 }
 
@@ -289,6 +308,7 @@ function start_dry_run() {
  echo
 
  DRY_RUN="true"
+ ENABLE_OS_MODS="true"
  initialize
 
  echo
