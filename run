@@ -273,7 +273,6 @@ function initialize() {
   log "⚙️   [DRY RUN] Execute: mkdir -p \"/opt/audio/\""
  else
  if [[ "$ENABLE_OS_MODS" == "true" ]]; then
-  mkdir -p /opt/audio
   include_os_mods
  fi
  fi
@@ -293,9 +292,13 @@ function initialize() {
 
 function includ_os_mods () {
 
+ # Make sure it exists
+ mkdir -p /opt/audio
+
  log "📂  Copying new tmux configuration..."
  if [[ -d "$SCRIPT_DIR/os-modos-mods" ]]; then
-  safe_execute "cp -rf \"$SCRIPT_DIR/os-mods/media/audio\" \"/opt/audio/\""
+  safe_execute "sudo cp -rf \"$SCRIPT_DIR/os-mods/media/audio\" \"/opt/audio/\""
+  safe_execute "sudo chown \"/opt/audio/\""
  else
   log "⚠️   Warning: Source config directory '$SCRIPT_DIR/os-mods/media/audio' not found."
  fi
