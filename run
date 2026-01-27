@@ -6,7 +6,7 @@ set -uo pipefail
 # Create temp directory
 SCRATCH_SPACE="/tmp/dev-env"
 if [[ ! -f "$SCRATCH_SPACE" ]]; then
- mkdir -p "/tmp/dev-env" > /dev/null 2>&1
+ mkdir -p "/tmp/dev-env" >/dev/null 2>&1
 fi
 
 #Global Variables
@@ -82,12 +82,12 @@ function install_font() {
   for font in "$src_path"/*; do
    log "📁  [DRY RUN] Copying font $font to $dest_path"
   done
-  log "⚙️  [DRY RUN] Executting command fc-cache -f"
+  log "⚙️  [DRY RUN] Executing command fc-cache -f"
   return 0
  fi
 
  safe_execute "cp -a \"$src_path/.\" \"$dest_path\""
- 
+
  log "Rebuilding font cache..."
  safe_execute "fc-cache -f"
 }
@@ -144,12 +144,47 @@ function tmux_fix() {
  fi
 }
 
+# Resolve location, handling symlinks
+function current-location {
+ 
+ SOURCE="${BASH_SOURCE[0]}"
+
+ while [ -h "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+ done
+ 
+ DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+ echo "$DIR"
+}
+
+function pre_flight_check() {
+
+ # Ensure that Tmux isn't running
+ if [[ -v TMUX ]]; then
+
+  echo -e "(!) \e[1;93mQuit Tmux before proceeding\e[0m"
+  echo -e "    \e[90mCommand:\e[0m \e[38;2;232mpkill -f tmux\e[0m"
+  echo
+
+  path=$(current-location)
+  message="Continue the script: $path/run"
+
+  read -r -p "Run command now? (y/n) : " answer
+
+  if [[ "$answer" == "y" ]]; then
+   echo "$message"
+   pkill -f tmux
+  fi
+  exit 0
+ fi
+}
+
 function initialize() {
- echo
- echo "=========================================="
- log "❯❯❯❯  Initializing Dev Environment    ❯❯❯❯"
- echo "=========================================="
- echo
+
+ pre_flight_check
+
  check_dependencies
 
  # Skip prompt in dry run
@@ -244,31 +279,28 @@ function initialize() {
  fi
 }
 
-# --- THE REQUESTED DRY-RUN FUNCTION ---
 function start_dry_run() {
+
+ echo
  echo "=========================================="
  echo "🚧       STARTING DRY-RUN MODE          🚧"
  echo "=========================================="
+ echo
 
- # 1. Set the global flag
  DRY_RUN="true"
-
- # 2. Invoke the standard main logic
- # Because DRY_RUN is true, 'safe_execute' will intercept commands
  initialize
- 
+
  echo
  echo "=========================================="
  echo "🏁       DRY-RUN MODE COMPLETE          🏁"
  echo "=========================================="
+ echo
 }
 
 # --- Main Entry Point Logic ---
-# Check if the first argument is --dry-run
 if [[ "${1:-}" == "--dry-run" ]]; then
  start_dry_run
 else
- # Standard execution
- echo -e "\e[90m(i) Starting initialization script...\e[0m"
+ echo -e "\e[90m(i) Initialization Dev Environment...\e[0m"
  initialize
 fi

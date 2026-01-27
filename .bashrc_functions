@@ -12,31 +12,85 @@ NC='\e[0m'   # No Color
 # UTILITY FUNCTIONS
 ############################################
 
-# Enhanced clipboard: Supports X11, Wayland, and MacOS
 clipboard() {
+ local G='\033[0;92m'
+ local R='\033[0;91m'
+ local Y='\033[1;93m'
+ local M='\033[0;90m'
+ local NC='\033[0m'
+
  local file="$1"
+ local _input_source=""
 
- if [[ -z "$file" ]]; then
-  echo -e " ${G}(i)${NC} Usage : \e[1;27mclipboard\e[0m ${Y}<file>${NC}"
-  return 1
- fi
-
- if [[ ! -f "$file" ]]; then
-  echo -e " ${R}(!)${NC} File not found: $file"
-  return 1
- fi
-
- if command -v wl-copy >/dev/null; then
-  cat "$file" | wl-copy 2> /dev/null
- elif command -v xclip >/dev/null; then
-  cat "$file" | xclip -selection clipboard 2> /dev/null 
+ # --- Input Validation ---
+ if [[ -n "$file" ]]; then
+  if [[ ! -f "$file" ]]; then
+   echo -e " ${R}(!)${NC} File not found: $file"
+   return 1
+  fi
+  _input_source="file"
+ elif [[ -p /dev/stdin ]]; then
+  _input_source="stdin"
  else
-  echo -e " ${R}(!)${NC} No clipboard utility (xclip, wl-copy, pbcopy) found."
+  echo -e " ${G}(i)${NC} Usage: \e[1;27mclipboard\e[0m ${Y}<file>${NC} or \e[1;27mcommand\e[0m | \e[1;27mclipboard\e[0m"
   return 1
  fi
 
- echo -e "${M} File ${G}$(basename "$file")${NC}${M} contents copied to system clipboard${NC}"
+ # 1. macOS
+ if [[ "$(uname)" == "Darwin" ]] && command -v pbcopy >/dev/null; then
+  if [[ "$_input_source" == "file" ]]; then
+   pbcopy <"$file"
+  else
+   cat | pbcopy
+  fi
+
+ # 2. Wayland (Only if WAYLAND_DISPLAY is set)
+ elif [[ -n "$WAYLAND_DISPLAY" ]] && command -v wl-copy >/dev/null; then
+  if [[ "$_input_source" == "file" ]]; then
+   wl-copy <"$file"
+  else
+   cat | wl-copy
+  fi
+
+ # 3. WSL (Windows Subsystem for Linux)
+ elif grep -q "Microsoft" /proc/version 2>/dev/null && command -v clip.exe >/dev/null; then
+  if [[ "$_input_source" == "file" ]]; then
+   cat "$file" | clip.exe
+  else
+   cat | clip.exe
+  fi
+
+ # 4. X11 (xclip)
+ elif [[ -n "$DISPLAY" ]] && command -v xclip >/dev/null; then
+  if [[ "$_input_source" == "file" ]]; then
+   xclip -selection clipboard -i "$file"
+  else
+   cat | xclip -selection clipboard
+  fi
+
+ # 5. X11 (xsel fallback)
+ elif [[ -n "$DISPLAY" ]] && command -v xsel >/dev/null; then
+  if [[ "$_input_source" == "file" ]]; then
+   xsel --clipboard --input <"$file"
+  else
+   cat | xsel --clipboard --input
+  fi
+
+ else
+  echo -e " ${R}(!)${NC} Could not detect a valid clipboard utility or display session."
+  echo -e "       Debug: WAYLAND_DISPLAY='$WAYLAND_DISPLAY', DISPLAY='$DISPLAY'"
+  return 1
+ fi
+
+ # --- Success Message ---
+ if [[ "$_input_source" == "file" ]]; then
+  echo -e "${M} File ${G}$(basename "$file")${NC}${M} contents copied to system clipboard.${NC}"
+ else
+  echo -e "${G} Input copied to system clipboard.${NC}"
+ fi
 }
+
+export -f clipboard
 
 fmt() {
  local script="$1"
@@ -62,12 +116,39 @@ fmt() {
  fi
 }
 
-# Consolidated and fixed Fuzzy Search
+# Depth of terminal sessions
+terminal_depth() {
+
+ #pstree -p -A -s $$ | \
+ #head -n 1 | \
+ #sed "s/($$).*/($$)/; s/([0-9]*)//g; s/---/ ➤ /g; s/ ➤ -/ ➤ /g; s/tmux: server/tmux/"
+
+ # Get the raw tree with PIDs, truncated at the current shell ($$)
+ local tree=$(pstree -p -A -s $$ | head -n 1 | sed "s/($$).*/($$)/")
+
+ if [[ "$1" == "--pid" ]]; then
+  # Format WITH PIDs: Add space before (, switch arrows, clean artifacts
+  echo "$tree" | sed 's/---/ ➤ /g; s/(/ (/g; s/ ➤ -/ ➤ /g; s/tmux: server/tmux/'
+ else
+  # Format WITHOUT PIDs: Remove numbers, switch arrows, clean artifacts
+  echo "$tree" | sed 's/([0-9]*)//g; s/---/ ➤ /g; s/ ➤ -/ ➤ /g; s/tmux: server/tmux/'
+ fi
+
+}
+
+export -f terminal_depth
+
 fz() {
+
  # Dependency check
  if ! command -v fzf >/dev/null || ! command -v whiptail >/dev/null; then
-  echo "Error: fzf and whiptail are required."
-  return 1
+  echo "Dependencies [fzf] and [whiptail] are required. Installing now..."
+  sudo apt install fzf -y && sudo apt install whiptail -y
+
+  if ! command -v fzf >/dev/null || ! command -v whiptail >/dev/null; then
+   echo "Dependencies are missing. Terminating"
+   exit 1
+  fi
  fi
 
  local selected_item
@@ -367,7 +448,7 @@ function list-fonts {
 
  # if user entered input
  if [[ ! -z "$1" ]]; then
-  filter="$1"  
+  filter="$1"
   for filter in "${filters[@]}"; do
    if [[ "$filter" == "$input" ]]; then
     enabled="true"
@@ -381,7 +462,7 @@ function list-fonts {
   read -r -p "Choose available filter: " input
   filter="$input"
   enabled="true"
- fi 
+ fi
 
  counter=0
  for f in /usr/share/figlet/*.[tf]lf; do
