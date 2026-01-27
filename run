@@ -126,7 +126,7 @@ function tmux_fix() {
  safe_execute "mkdir -p \"$TMUX_CONFIG_DIR\""
 
  if [[ ! -d "$TPM_DIR" ]]; then
-  log "💾 Installing TPM from remote (GitHub)..."
+  log "💾 Installing TPM..."
   safe_execute "git clone https://github.com/tmux-plugins/tpm \"$TPM_DIR\""
  else
   log "👍  TPM already installed: $TMUX_CONFIG_DIR."
@@ -246,7 +246,7 @@ function initialize() {
 
  log "📂  Copying new tmux configuration..."
  if [[ -d "$SCRIPT_DIR/.config/tmux" ]]; then
-  safe_execute "cp -rf \"$SCRIPT_DIR/.config/tmux/.\" \"$TMUX_CONFIG_DIR/\""
+  safe_execute "cp -rf \"$SCRIPT_DIR/.config/tmux/*\" \"$TMUX_CONFIG_DIR\""
  else
   log "⚠️   Warning: Source config directory '$SCRIPT_DIR/.config/tmux' not found."
  fi
