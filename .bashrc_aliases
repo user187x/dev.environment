@@ -41,15 +41,15 @@ alias bat="$batcmd --style=full"
 
 # Project Navigation
 DEV_ENV_PATH="$HOME/dev.environment"
-if [[ -d "$cnc_path" ]]; then
- alias denv="cd $cnc_path"
+if [[ -d "$DEV_ENV_PATH" ]]; then
+ alias denv="cd $DEV_ENV_PATH"
 else
+ if [[ -f "$SCRIPT_HOME/run" ]]; then
+  ln -s "$SCRIPT_HOME" "$DEV_ENV_PATH"
+ fi 
  # Only echo warning if interactive
  if [[ $- == *i* ]]; then
-  echo -e "\oe[1;93mSetup your dev.environment project to initialize properly: $cnc_path missing\e[0m"
-  if [[ -f "$SCRIPT_HOME/run" ]]; then
-   ln -s "$SCRIPT_HOME" "$DEV_ENV_PATH"
-  fi 
+  echo -e "e\[1;93mSetup your dev.environment project to initialize properly: $DEV_ENV_PATH missing\e[0m"
  fi
 fi
 
