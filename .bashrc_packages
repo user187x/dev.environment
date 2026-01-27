@@ -1,112 +1,207 @@
 #!/bin/bash
 
-# 1. Update repositories first
-echo "Updating package lists..."
-sudo apt update -y
+# Configuration
+PKG_BACKUP_DIR="$HOME/.cached/dev-packages"
+mkdir -p "$PKG_BACKUP_DIR"
 
-# format: "binary_name:package_name"
-# If package name matches binary, just put the name.
-tools=(
- "tmux"
- "vim"
- "batcat:bat" # Binary is batcat, package is bat
- "curl"
- "wget"
- "openssl"
- "btop"
- "pluma"
- "gedit"
- "colordiff"
- "tty-clock"
- "java:default-jdk" # changed openjdk-25 to default-jdk (25 is rarely in default repos)
- "visualvm"
- "lolcat"
- "build-essential"
- "netstat:net-tools" # command is netstat, package is net-tools
- "jq"
- "notify-send:libnotify-bin"
- "yq"
- "figlet"
- "toilet"
- "tree"
- "whiptail"
- "duf"
- "fzf"
- "delta:git-delta" # package is git-delta
- "thefuck"
- "shfmt"
- "shellcheck"
- "yamllint"
- "neofetch"
- "expect"
- "xmllint:libxml2-utils"
- "jc"
- "gufw"
- "ranger"
- "mc"
- "cmatrix"
+# 1. Update repositories (Non-blocking)
+echo "--- 🔄 Updating Package Lists ---"
+if sudo apt update -y; then
+    echo "Update successful."
+    ONLINE=true
+else
+    echo -e "\e[1;91mUpdate failed. Proceeding in OFFLINE mode (using cache where possible).\e[0m"
+    ONLINE=false
+fi
+
+# Function: Back up a package (Runs AFTER a successful online install)
+backup_pkg() {
+    local pkg="$1"
+
+    # Validation
+    if [[ -z "$pkg" ]]; then return 1; fi
+
+    # Check what version we just installed
+    local installed_ver
+    installed_ver=$(dpkg-query -W -f='${Version}' "$pkg" 2>/dev/null)
+
+    if [[ -z "$installed_ver" ]]; then
+        echo "Error: '$pkg' was supposed to be installed but wasn't found."
+        return 1
+    fi
+
+    # Check if we already have this specific version cached
+    # We look for the package name followed by the version string to avoid downloading duplicates
+    if ls "$PKG_BACKUP_DIR/${pkg}_${installed_ver}"*.deb 1> /dev/null 2>&1; then
+        echo "[$pkg] Backup already exists for version $installed_ver."
+        return 0
+    fi
+
+    echo "[$pkg] Backing up version $installed_ver..."
+
+    # Clean old versions of this specific package to save space
+    rm -f "$PKG_BACKUP_DIR/${pkg}_"*.deb
+
+    # Download in a subshell to keep current directory clean
+    (
+        cd "$PKG_BACKUP_DIR" || return
+        # specific download command requires apt-get, not apt
+        if apt-get download "$pkg" >/dev/null 2>&1; then
+            echo "[$pkg] Cached to $PKG_BACKUP_DIR"
+        else
+            echo "[$pkg] Failed to download backup."
+        fi
+    )
+}
+
+# Function: Install from local cache (Runs if online install FAILS)
+install_pkg_from_cache() {
+    local pkg="$1"
+    
+    echo "[$pkg] Attempting offline install from cache..."
+
+    # Find the .deb file. 
+    # specific logic: Find file starting with pkg name followed by underscore (standard deb naming)
+    # We grab the newest file if multiple exist (head -n 1)
+    local deb_file
+    deb_file=$(find "$PKG_BACKUP_DIR" -maxdepth 1 -name "${pkg}_*.deb" -print | head -n 1)
+
+    if [[ -z "$deb_file" ]]; then
+        echo -e "[$pkg] \e[1;91mNo cached backup found.\e[0m"
+        return 1
+    fi
+
+    echo "[$pkg] Found cached file: $(basename "$deb_file")"
+    
+    # Try installing via dpkg (apt install ./file works too but requires path)
+    if sudo apt install "$deb_file" -y; then
+        echo -e "[$pkg] \e[1;92mSuccessfully installed from cache.\e[0m"
+        return 0
+    else
+        echo -e "[$pkg] \e[1;91mFailed to install from cache (missing dependencies?).\e[0m"
+        return 1
+    fi
+}
+
+# List of tools (Binary:Package or just Package)
+packages=(
+    "tmux"
+    "vim"
+    "batcat:bat"
+    "curl"
+    "wget"
+    "openssl"
+    "btop"
+    "pluma"
+    "gedit"
+    "colordiff"
+    "tty-clock"
+    "java:default-jdk"
+    "visualvm"
+    "lolcat"
+    "build-essential"
+    "netstat:net-tools"
+    "jq"
+    "notify-send:libnotify-bin"
+    "yq"
+    "figlet"
+    "toilet"
+    "tree"
+    "whiptail"
+    "duf"
+    "fzf"
+    "delta:git-delta"
+    "thefuck"
+    "shfmt"
+    "shellcheck"
+    "yamllint"
+    "neofetch"
+    "expect"
+    "xmllint:libxml2-utils"
+    "jc"
+    "gufw"
+    "ranger"
+    "mc"
+    "cmatrix"
 )
 
 failed=()
 installed=()
 
-echo "--- 📦 Starting APT Tool Installation ---"
+echo ""
+echo "--- 📦 Starting APT Package Installation ---"
 
-for item in "${tools[@]}"; do
- # Split the string by colon to get binary and package
- if [[ "$item" == *":"* ]]; then
-  binary="${item%%:*}"
-  package="${item##*:}"
- else
-  binary="$item"
-  package="$item"
- fi
+for item in "${packages[@]}"; do
+    # Split the string by colon to get binary and package
+    if [[ "$item" == *":"* ]]; then
+        binary="${item%%:*}"
+        package="${item##*:}"
+    else
+        binary="$item"
+        package="$item"
+    fi
 
- if ! command -v "$binary" >/dev/null 2>&1; then
-  echo "Installing $package..."
-  if ! sudo apt install "$package" -y; then
-   echo -e "Tool [\e[1;91m$package\e[0m] failed to install"
-   failed+=("$package")
-  else
-   echo -e "Tool [\e[1;92m$package\e[0m] Installed"
-   installed+=("$package")
-  fi
- else
-  echo -e "Tool [\e[1;92m$package\e[0m] already installed"
-  installed+=("$package")
- fi
+    # 1. Check if binary exists
+    if ! command -v "$binary" >/dev/null 2>&1; then
+        echo "Installing $package..."
+        
+        # 2. Try Online Install
+        if sudo apt install "$package" -y; then
+            echo -e "Tool [\e[1;92m$package\e[0m] Installed (Online)"
+            installed+=("$package")
+            
+            # 3. If Online Success -> Backup for next time
+            backup_pkg "$package"
+        else
+            echo -e "Online install failed for [\e[1;91m$package\e[0m]. Trying Cache..."
+            
+            # 4. Try Offline Install
+            if install_pkg_from_cache "$package"; then
+                installed+=("$package")
+            else
+                echo -e "Tool [\e[1;91m$package\e[0m] failed completely."
+                failed+=("$package")
+            fi
+        fi
+    else
+        echo -e "Tool [\e[1;92m$package\e[0m] already installed"
+        installed+=("$package")
+        
+        # Optional: Even if installed, ensure we have a backup if we are online
+        if [ "$ONLINE" = true ]; then
+            backup_pkg "$package"
+        fi
+    fi
 done
 
 echo ""
-echo -e "(i) Total Tools     : \e[1;94m${#tools[@]}\e[0m"
+echo -e "(i) Total Tools     : \e[1;94m${#packages[@]}\e[0m"
 echo -e "(i) Total Installed : \e[1;92m${#installed[@]}\e[0m"
 
 count="${#failed[@]}"
-
 if [[ "$count" -eq 0 ]]; then
- msg="\e[1;92m$count\e[0m"
+    msg="\e[1;92m$count\e[0m"
 else
- msg="\e[1;91m$count\e[0m"
+    msg="\e[1;91m$count\e[0m"
 fi
-
 echo -e "(i) Total Failed    : $msg"
 
-if [[ "${#tools[@]}" -ne "${#installed[@]}" ]]; then
- echo "Tools Missing/Failed:"
- for tool in "${failed[@]}"; do
-  echo -e " [\e[1;91m$tool\e[0m]"
- done
+if [[ "${#packages[@]}" -ne "${#installed[@]}" ]]; then
+    echo "Tools Missing/Failed:"
+    for tool in "${failed[@]}"; do
+        echo -e " [\e[1;91m$tool\e[0m]"
+    done
 else
- echo -e "(i) \e[1;92mAll apt tools processed successfully!\e[0m"
+    echo -e "(i) \e[1;92mAll apt packages processed successfully!\e[0m"
 fi
 
 echo ""
 echo "--- 🚀 Starting Custom Installations ---"
 
+# (The rest of your custom installation script follows below unchanged)
 # Install ghostty terminal
 if ! command -v ghostty >/dev/null 2>&1; then
  echo "Installing ghostty..."
- # Ensure curl is installed before running this
  sudo apt install curl -y
  curl -fsSL https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh | sh
 fi
@@ -114,7 +209,6 @@ fi
 # Install Helm
 if ! command -v helm >/dev/null 2>&1; then
  echo "Installing helm..."
- # Changed get-helm-4 to get-helm-3 (standard script)
  curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
  rm get_helm.sh
 fi
@@ -123,9 +217,8 @@ fi
 if ! command -v docker >/dev/null 2>&1; then
  echo "Installing Docker..."
  curl -fsSL https://get.docker.com | sh
- # Add current user to docker group so sudo isn't needed
  sudo usermod -aG docker "$USER"
- echo "Docker installed. You may need to logout/login for group changes to take effect."
+ echo "Docker installed. Logout/login required."
 fi
 
 # Install system monitor
@@ -134,7 +227,7 @@ if ! command -v indicator-multiload >/dev/null 2>&1; then
  sudo apt install indicator-multiload -y
 fi
 
-# Install tools for extensions
+# Install shell extensions
 if ! command -v gnome-shell-extension-manager >/dev/null 2>&1; then
  echo "Installing gnome-shell-extension-manager..."
  sudo apt install gnome-shell-extension-manager -y
@@ -146,25 +239,23 @@ if ! command -v dconf-editor >/dev/null 2>&1; then
  sudo apt install dconf-editor -y
 fi
 
-# Install VS Code (Desktop Version)
+# Install VS Code
 if ! command -v code >/dev/null 2>&1; then
- echo "Installing VS Code (Snap)..."
+ echo "Installing VS Code..."
  sudo snap install code --classic
 fi
 
-# Install Flatpak (Prerequisite for Mission Center)
+# Install Flatpak
 if ! command -v flatpak >/dev/null 2>&1; then
  echo "Installing flatpak..."
  sudo apt install flatpak -y
  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 fi
 
-# Install Mission Center (Independent check)
+# Install Mission Center
 if ! flatpak list 2>/dev/null | grep -q "io.missioncenter.MissionCenter"; then
  echo "Installing MissionCenter..."
  flatpak install flathub io.missioncenter.MissionCenter -y
-else
- echo "MissionCenter already installed."
 fi
 
 # Install LazyDocker
@@ -186,10 +277,8 @@ fi
 
 # Center Windows
 echo "Configuring GNOME Window settings..."
-# We wrap this in a try/catch style because gsettings might fail on headless servers
 if command -v gsettings >/dev/null 2>&1; then
  centered=$(gsettings get org.gnome.mutter center-new-windows)
- # Fixed boolean logic check
  if [[ "$centered" != "'true'" && "$centered" != "true" ]]; then
   echo "Setting all windows to be centered!"
   gsettings set org.gnome.mutter center-new-windows true
