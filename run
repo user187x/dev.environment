@@ -100,8 +100,8 @@ function tmux_fix() {
  local TPM_DIR="$TMUX_CONFIG_DIR/plugins/tpm"
  local PLUGINS_DIR="$TMUX_CONFIG_DIR/plugins"
 
- log "🗄️  Saving plugin path to $TMUX_CONFIG_DIR/.tmux_meta"
- echo "$PLUGINS_DIR" >"$TMUX_CONFIG_DIR/.tmux_meta"
+ log "🗄️  Saving tmux path to $TMUX_CONFIG_DIR/.tmux_meta"
+ echo "$TMUX_CONFIG_DIR" > "$TMUX_CONFIG_DIR/.tmux_meta"
 
  if pgrep -x "tmux" >/dev/null; then
   if [[ "$DRY_RUN" == "true" ]]; then
