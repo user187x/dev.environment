@@ -246,7 +246,7 @@ function initialize() {
 
  log "📂  Copying new tmux configuration..."
  if [[ -d "$SCRIPT_DIR/.config/tmux" ]]; then
-  safe_execute "cp -rf \"$SCRIPT_DIR/.config/tmux/*\" \"$TMUX_CONFIG_DIR\""
+  safe_execute "cp -raf \"$SCRIPT_DIR/.config/tmux\" \"$TMUX_CONFIG_DIR/\""
  else
   log "⚠️   Warning: Source config directory '$SCRIPT_DIR/.config/tmux' not found."
  fi
