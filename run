@@ -254,8 +254,9 @@ function initialize() {
  install_font "$SCRIPT_DIR/fonts/nerdfont.zip"
 
  # --- Sourcing files ---
- local aux_files=(".bashrc_packages" ".bashrc_aliases" ".bashrc_functions")
- for file in "${aux_files[@]}"; do
+ local white_list_files=(".bashrc_packages" ".bashrc_aliases" ".bashrc_functions" ".bashrc_completions")
+
+ for file in "${white_list_files[@]}"; do
   if [[ -f "$SCRIPT_DIR/$file" ]]; then
    if [[ "$DRY_RUN" == "true" ]]; then
     log "🪄  [DRY RUN] Source: $SCRIPT_DIR/$file"
