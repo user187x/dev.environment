@@ -270,8 +270,10 @@ function initialize() {
 
  if [[ "$DRY_RUN" == "true" ]]; then
   log "⚙️   [DRY RUN] Execute: cp -rf \"$SCRIPT_DIR/os-mods/audio\" \"/opt/audio/\""
+  log "⚙️   [DRY RUN] Execute: mkdir -p \"/opt/audio/\""
  else
  if [[ "$ENABLE_OS_MODS" == "true" ]]; then
+  mkdir -p /opt/audio
   include_os_mods
  fi
  fi
