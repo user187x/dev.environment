@@ -1,12 +1,11 @@
 #!/bin/bash
 
 # $1 = Pane PID (from tmux)
-# $2 = Current Path (passed from tmux so we can include it in the output)
+# $2 = Current Path
 CURRENT_PID=$1
 CURRENT_PATH=$2
 
 # --- CONFIG: Colors (Dracula Theme) ---
-# You can change these hex codes to whatever you prefer.
 # #50fa7b = Green, #ff79c6 = Pink, #8be9fd = Cyan, #f8f8f2 = White
 VAL_COLOR="#[fg=#f8f8f2]"
 RESET_COLOR="#[fg=default]"
@@ -14,7 +13,7 @@ RESET_COLOR="#[fg=default]"
 # Validation
 if [ -z "$CURRENT_PID" ]; then exit 0; fi
 
-# --- FUNCTION: Recursive Child Finder ---
+# Recursive Child Finder ---
 find_deepest_child() {
  local parent=$1
  local child=$(pgrep -P "$parent" -n)
@@ -25,6 +24,7 @@ find_deepest_child() {
   find_deepest_child "$child"
  fi
 }
+
 # ----------------------------------------
 
 # 1. Find the Deepest Active Process (The Leaf)
@@ -49,7 +49,4 @@ fi
 CLEAN_TREE=$(echo "$TREE_OUTPUT" |
  sed "s/($LEAF_PID).*/($LEAF_PID)/; s/([0-9]*)//g; s/---/ ➤ /g; s/ ➤ -/ ➤ /g; s/^systemd ➤ systemd ➤ //; s/tmux: server/tmux/")
 
-# 5. Output the FULL Format
-#    We combine User, Path, and Tree here so they update atomically
-#echo "User [$LEAF_USER] Path [$CURRENT_PATH] Tree [$CLEAN_TREE]"
-echo "User [${VAL_COLOR}${LEAF_USER}${RESET_COLOR}] Path [${VAL_COLOR}${CURRENT_PATH}${RESET_COLOR}] Hierarchy [${VAL_COLOR}${CLEAN_TREE}${RESET_COLOR}]"
+echo "User [${VAL_COLOR}${LEAF_USER}${RESET_COLOR}] Path [${VAL_COLOR}${CURRENT_PATH}${RESET_COLOR}] Terminal-Depth [${VAL_COLOR}${CLEAN_TREE}${RESET_COLOR}]"
