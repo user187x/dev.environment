@@ -323,7 +323,7 @@ update_dynamic_prompt() {
 ############################################
 
 exit_sound() {
- local sound_file="/opt/audio/twirp.mp3"
+ local sound_file="/opt/audio/Megamanteleport.wav"
  if [[ -f "$sound_file" ]] && command -v mpv >/dev/null; then
   nohup mpv --no-video "$sound_file" >/dev/null 2>&1 &
   disown

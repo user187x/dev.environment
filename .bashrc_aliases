@@ -39,6 +39,10 @@ else
 fi
 alias bat="$batcmd --style=full"
 
+if [[ -f "$SCRIPT_HOME/run" ]];then
+ alias re-source="./$SCRRIPT_HOME/run"
+fi
+
 # Project Navigation
 DEV_ENV_PATH="$HOME/dev.environment"
 if [[ -d "$DEV_ENV_PATH" ]]; then
