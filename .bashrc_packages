@@ -125,7 +125,7 @@ packages=(
  "shfmt"
  "shellcheck"
  "yamllint"
- "neofetch"
+ "neofetch:neofetch-desktop"
  "expect"
  "xmllint:libxml2-utils"
  "jc"
@@ -204,6 +204,9 @@ if [[ "${#packages[@]}" -ne "${#installed[@]}" ]]; then
 else
  echo -e "(i) \e[1;92mAll apt packages processed successfully!\e[0m"
 fi
+
+echo "Updating package manager"
+sudo apt update -y && sudo apt upgrade -y
 
 echo ""
 echo "--- 🚀 Starting Custom Installations ---"
