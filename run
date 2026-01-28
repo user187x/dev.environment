@@ -3,26 +3,27 @@
 #Safety & Strict Mode
 set -uo pipefail
 
-# Create temp directory
-SCRATCH_SPACE="/tmp/dev-env"
-if [[ ! -f "$SCRATCH_SPACE" ]]; then
+DRY_RUN="false"
+
+# Temp directories
+TEMP_DEV_INIT_DIR="/tmp/dev-env"
+LOG_FILE="$TEMP_DEV_INIT_DIR/dev-env.log"
+
+# Create if not present
+if [[ ! -f "$TEMP_DEV_INIT_DIR" ]]; then
  mkdir -p "/tmp/dev-env" >/dev/null 2>&1
 fi
 
 #Global Variables
+SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_PATH="$SCRATCH_SPACE/env-backup-${TIMESTAMP}.tar"
-TMUX_CONFIG_DIR="$HOME/.config/tmux"
-LOG_FILE="$SCRATCH_SPACE/dev-init-${TIMESTAMP}.log"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Global Flag for Dry Run (Default to false)
-DRY_RUN="false"
-ENABLE_OS_MODS="false"
+BACKUP_PATH="$TEMP_DEV_INIT_DIR/env-backup-${TIMESTAMP}.tar"
+TMUX_DST_DIR="$HOME/.config/tmux"
 
 # --- Helper Function ---
 function log() {
- echo -e "$@" | tee -a "$LOG_FILE"
+ #echo -e "$@" | tee -a "$LOG_FILE"
+ echo -e "$@"
 }
 
 # --- Helper Function ---
@@ -33,6 +34,7 @@ function error_exit() {
 
 # If DRY_RUN is false, it executes it using eval (to handle pipes/redirects).
 function safe_execute() {
+
  local cmd="$*"
 
  if [[ "$DRY_RUN" == "true" ]]; then
@@ -49,10 +51,11 @@ function safe_execute() {
 }
 
 function check_dependencies() {
+
  local deps=("tmux" "tar" "git" "fc-cache")
+
  for cmd in "${deps[@]}"; do
   if ! command -v "$cmd" &>/dev/null; then
-   # In dry run, we might be testing on a machine missing deps, so we warn instead of fail
    if [[ "$DRY_RUN" == "true" ]]; then
     log "⚠️  [DRY RUN] Missing dependency '$cmd' (ignoring for test)"
    else
@@ -62,34 +65,22 @@ function check_dependencies() {
  done
 }
 
-function install_font() {
+function install_fonts() {
 
- local src_path="$SCRIPT_DIR/fonts"
- local dest_path="$HOME/.local/share/fonts"
-
- if [[ -f "$1" ]]; then
-  src_path="$1"
- fi
+ local SRC_FONT_DIR="$SRC_DIR/fonts"
+ local DST_FONT_DIR="$HOME/.local/share/fonts"
 
  echo
  log "💾  Installing Fonts..."
 
  # Ensure destination directory exits
- log "⚙️   Creating directory $dest_path"
- mkdir -p "$dest_path"
+ safe_execute "mkdir -p \"$DST_FONT_DIR\""
 
- # In dry run, we skip the interactive prompts to automate the test flow
- if [[ "$DRY_RUN" == "true" ]]; then
-  for font in "$src_path"/*; do
-   log "📁  [DRY RUN] Copying font $font to $dest_path"
-  done
-  log "⚙️   [DRY RUN] Executing command fc-cache -f"
-  return 0
- fi
+ safe_execute "cp -a \"$SRC_FONT_DIR/.\" \"$DST_FONT_DIR\""
+ for font in "$SRC_FONT_DIR"/*; do
+  log "📁  [DRY RUN] Execute: cp -a $font to $DST_FONT_DIR"
+ done
 
- safe_execute "cp -a \"$src_path/.\" \"$dest_path\""
-
- log "Rebuilding font cache..."
  safe_execute "fc-cache -f"
 }
 
@@ -98,42 +89,23 @@ function tmux_fix() {
  log "⟳   Initializing Tmux..."
  echo
 
- local TPM_DIR="$TMUX_CONFIG_DIR/plugins/tpm"
- local PLUGINS_DIR="$TMUX_CONFIG_DIR/plugins"
+ local TPM_DIR="$TMUX_DST_DIR/plugins/tpm"
+ local PLUGINS_DIR="$TMUX_DST_DIR/plugins"
 
- log "🗄️  Saving tmux path to $TMUX_CONFIG_DIR/.tmux_meta"
- echo "$TMUX_CONFIG_DIR" > "$TMUX_CONFIG_DIR/.tmux_meta"
+ log "🗄️  Saving tmux path to $TMUX_DST_DIR/.tmux_meta"
+ echo "$TMUX_DST_DIR" >"$TMUX_DST_DIR/.tmux_meta"
 
- if pgrep -x "tmux" >/dev/null; then
-  if [[ "$DRY_RUN" == "true" ]]; then
-   log "⚙️  [DRY RUN] Kill Tmux server."
-  else
-   log "⚠️  A Tmux server is currently running."
-   read -r -p "Kill existing Tmux server to apply changes? (y/n): " kill_ans
-   if [[ "$kill_ans" == "y" ]]; then
-    safe_execute "tmux kill-server 2>/dev/null || true"
-   fi
-  fi
- fi
+ log "🗑️  Clearing temporary caches..."
 
- # Dracula caches status bar scripts in /tmp. If you change configs or move files
- # without clearing this, it will load the old (or default) state, ignoring your settings.
- log "🗑️  Clearing Tmux/Dracula temporary caches..."
  echo
- safe_execute "rm -rf /tmp/tmux-dracula*" 2>/dev/null
- safe_execute "rm -rf /tmp/tmux-*" 2>/dev/null
+ safe_execute "rm -rf /tmp/tmux" 2>/dev/null
+ safe_execute "mkdir -p \"$TMUX_DST_DIR\""
 
- safe_execute "mkdir -p \"$TMUX_CONFIG_DIR\""
-
- if [[ ! -d "$TPM_DIR" ]]; then
-  log "💾 Installing TPM..."
-  safe_execute "git clone https://github.com/tmux-plugins/tpm \"$TPM_DIR\""
- else
-  log "👍  TPM already installed: $TMUX_CONFIG_DIR."
- fi
+ log "💾 Installing TPM..."
+ safe_execute "cp -raf \"$SRC_DIR/.config/tmux/.\" \"$TMUX_DST_DIR/\""
+ safe_execute "chmod -R 755 \"$PLUGINS_DIR\""
 
  # TPM requires plugin scripts (*.tmux) to be executable to auto-load.
- # Copied files often lose this attribute.
  if [[ -d "$PLUGINS_DIR" ]]; then
   log "🛂  Setting executable permissions for plugins..."
   safe_execute "chmod -R 755 \"$PLUGINS_DIR\""
@@ -147,7 +119,7 @@ function tmux_fix() {
 
 # Resolve location, handling symlinks
 function current-location {
- 
+
  SOURCE="${BASH_SOURCE[0]}"
 
  while [ -h "$SOURCE" ]; do
@@ -155,7 +127,7 @@ function current-location {
   SOURCE="$(readlink "$SOURCE")"
   [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
  done
- 
+
  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
  echo "$DIR"
 }
@@ -164,21 +136,10 @@ function pre_flight_check() {
 
  # Ensure that Tmux isn't running
  if [[ -v TMUX ]]; then
-
   echo -e "(!) \e[1;93mQuit Tmux before proceeding\e[0m"
   echo -e "    \e[90mCommand:\e[0m \e[38;2;232mpkill -f tmux\e[0m"
   echo
-
-  path=$(current-location)
-  message="Continue the script: $path/run"
-
-  read -r -p "Run command now? (y/n) : " answer
-
-  if [[ "$answer" == "y" ]]; then
-   echo "$message"
-   pkill -f tmux
-  fi
-  exit 0
+  exit 1
  fi
 }
 
@@ -206,29 +167,29 @@ function initialize() {
 
   log "🗑️  Removing existing bashrc..."
   safe_execute "rm -f \"$HOME/.bashrc\""
-  safe_execute "ln -s \"$SCRIPT_DIR/.bashrc\" \"$HOME/.bashrc\""
+  safe_execute "ln -s \"$SRC_DIR/.bashrc\" \"$HOME/.bashrc\""
  fi
 
  if [[ -L "$HOME/.bashrc_aliases" ]]; then
-  log "🛈︎  .bashrc_aliases is already a symlink. Skipping."
+  log "🛈︎  .bashrc_aliases is already a symlink :: Skipping."
  else
-  log "⛃ Backing up existing ~/.bashrc_aliases to $BACKUP_PATH"
+  log "⛃  Backing up existing ~/.bashrc_aliases to $BACKUP_PATH"
   safe_execute "tar -cf \"$BACKUP_PATH\" \"$HOME/.bashrc_aliases\" 2>/dev/null || true"
 
   log "🗑️  Removing existing bashrc_aliases..."
   safe_execute "rm -f \"$HOME/.bashrc_aliases\""
-  safe_execute "ln -s \"$SCRIPT_DIR/.bashrc_aliases\" \"$HOME/.bashrc_aliases\""
+  safe_execute "ln -s \"$SRC_DIR/.bashrc_aliases\" \"$HOME/.bashrc_aliases\""
  fi
 
  if [[ -L "$HOME/.bashrc_functions" ]]; then
   log "🛈︎  .bashrc_functions is already a symlink. Skipping."
  else
-  log "⛃ Backing up existing ~/.bashrc_functions to $BACKUP_PATH"
+  log "⛃  Backing up existing ~/.bashrc_functions to $BACKUP_PATH"
   safe_execute "tar -cf \"$BACKUP_PATH\" \"$HOME/.bashrc_functions\" 2>/dev/null || true"
 
   log "🗑️  Removing existing bashrc_functions..."
   safe_execute "rm -f \"$HOME/.bashrc_functions\""
-  safe_execute "ln -s \"$SCRIPT_DIR/.bashrc_functions\" \"$HOME/.bashrc_functions\""
+  safe_execute "ln -s \"$SRC_DIR/.bashrc_functions\" \"$HOME/.bashrc_functions\""
  fi
 
  # --- Tmux Config Handling ---
@@ -242,65 +203,60 @@ function initialize() {
   fi
  done
 
- safe_execute "mkdir -p \"$TMUX_CONFIG_DIR\""
-
+ safe_execute "mkdir -p \"$TMUX_DST_DIR\""
  log "📂  Copying new tmux configuration..."
- if [[ -d "$SCRIPT_DIR/.config/tmux" ]]; then
-  safe_execute "cp -raf \"$SCRIPT_DIR/.config/tmux\" \"$TMUX_CONFIG_DIR/\""
+
+ if [[ -d "$SRC_DIR/.config/tmux" ]]; then
+  safe_execute "cp -raf \"$SRC_DIR/.config/tmux\" \"$TMUX_DST_DIR/\""
  else
-  log "⚠️   Warning: Source config directory '$SCRIPT_DIR/.config/tmux' not found."
+  log "⚠️   Warning: Source config directory '$SRC_DIR/.config/tmux' not found."
  fi
 
+ # Call tmux_fix function
  tmux_fix
- install_font "$SCRIPT_DIR/fonts/nerdfont.zip"
+
+ # Call install_fonts function
+ install_fonts
 
  # --- Sourcing files ---
  local white_list_files=(".bashrc_packages" ".bashrc_aliases" ".bashrc_functions" ".bashrc_completions")
 
  for file in "${white_list_files[@]}"; do
-  if [[ -f "$SCRIPT_DIR/$file" ]]; then
+  if [[ -f "$SRC_DIR/$file" ]]; then
    if [[ "$DRY_RUN" == "true" ]]; then
-    log "🪄  [DRY RUN] Source: $SCRIPT_DIR/$file"
+    log "🪄  [DRY RUN] Source: $SRC_DIR/$file"
    else
     # shellcheck disable=SC1090
-    source "$SCRIPT_DIR/$file"
+    source "$SRC_DIR/$file"
    fi
   fi
  done
 
- if [[ "$DRY_RUN" == "true" ]]; then
-  log "⚙️   [DRY RUN] Execute: cp -rf \"$SCRIPT_DIR/os-mods/audio\" \"/opt/audio/\""
-  log "⚙️   [DRY RUN] Execute: mkdir -p \"/opt/audio/\""
+ SRC_MEDIA_DIR="$SRC_DIR/os-mods/audio"
+ DST_MEDIA_DIR="/opt/audio"
+
+ # Make sure it exists
+ safe_execute "mkdir -p \"$DST_MEDIA_DIR\""
+
+ for font in "$SRC_MEDIA_DIR"/*; do
+  log "📁  [DRY RUN] Copying font \"$SRC_MEDIA_DIR\" to \"$DST_MEDIA_DIR\""
+ done
+
+ log "📂  Copying new tmux configuration..."
+
+ if [[ -d "$SRC_MEDIA_DIR" ]]; then
+  safe_execute "sudo cp -rfT \"$SRC_MEDIA_DIR\" \"$DST_MEDIA_DIR\""
+  safe_execute "sudo chown -R $USER:$USER \"$DST_MEDIA_DIR\""
  else
- if [[ "$ENABLE_OS_MODS" == "true" ]]; then
-  include_os_mods
- fi
+  log "⚠️   Warning: Source media directory \"$SRC_MEDIA_DIR\" not found."
  fi
 
  log "👍  Environment Initialized Successfully!"
 
- if [[ "$DRY_RUN" == "true" ]]; then
-  log "⚙️   [DRY RUN] Execute: tmux -f $TMUX_CONFIG_DIR/tmux.conf"
+ if [[ -z "${TMUX:-}" ]]; then
+  safe_execute "tmux -f \"$TMUX_DST_DIR/tmux.conf\""
  else
-  if [[ -z "${TMUX:-}" ]]; then
-   exec tmux -f "$TMUX_CONFIG_DIR/tmux.conf"
-  else
-   tmux source-file "$TMUX_CONFIG_DIR/tmux.conf"
-  fi
- fi
-}
-
-function includ_os_mods () {
-
- # Make sure it exists
- mkdir -p /opt/audio
-
- log "📂  Copying new tmux configuration..."
- if [[ -d "$SCRIPT_DIR/os-modos-mods" ]]; then
-  safe_execute "sudo cp -rf \"$SCRIPT_DIR/os-mods/media/audio\" \"/opt/audio/\""
-  safe_execute "sudo chown \"/opt/audio/\""
- else
-  log "⚠️   Warning: Source config directory '$SCRIPT_DIR/os-mods/media/audio' not found."
+  safe_execute "tmux source-file \"$TMUX_DST_DIR/tmux.conf\""
  fi
 }
 
@@ -313,7 +269,6 @@ function start_dry_run() {
  echo
 
  DRY_RUN="true"
- ENABLE_OS_MODS="true"
  initialize
 
  echo
