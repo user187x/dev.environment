@@ -4,6 +4,7 @@
 set -uo pipefail
 
 DRY_RUN="false"
+AUTO_ACCEPT="false"
 
 # Temp directories
 TEMP_DEV_INIT_DIR="/tmp/dev-env"
@@ -150,7 +151,7 @@ function initialize() {
  check_dependencies
 
  # Skip prompt in dry run
- if [[ "$DRY_RUN" == "false" ]]; then
+ if [[ "$DRY_RUN" == "false" ]] && [[ "$AUTO_ACCEPT" == "false" ]]; then
   read -r -p "Continue with initialization? (y/n): " answer
   if [[ "$answer" != "y" ]]; then
    log "Terminating..."
@@ -277,6 +278,16 @@ function start_dry_run() {
  echo "=========================================="
  echo
 }
+
+# Checking args like a newb
+for arg in "$@"; do
+ if [[ "$arg" == "--dry-run" ]]; then
+  DRY_RUN="true"
+ fi
+ if [[ "$arg" == "--auto-accept" ]]; then
+  AUTO_ACCEPT="true"
+ fi
+done
 
 # --- Main Entry Point Logic ---
 if [[ "${1:-}" == "--dry-run" ]]; then
