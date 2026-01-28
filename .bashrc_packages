@@ -17,8 +17,13 @@ else
  ONLINE=false
 fi
 
-# Function: Back up a package (Runs AFTER a successful online install)
+# Upgrade the packages
+echo "Upgrading packages"
+sudo apt upgrade -y
+
+# Backup packages
 backup_pkg() {
+
  local pkg="$1"
 
  # Validation
