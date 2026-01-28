@@ -111,6 +111,7 @@ packages=(
  "toilet"
  "tree"
  "whiptail"
+ "mpv"
  "duf"
  "fzf"
  "delta:git-delta"
