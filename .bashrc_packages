@@ -109,6 +109,7 @@ packages=(
  "yq"
  "figlet"
  "toilet"
+ "qrencode"
  "tree"
  "whiptail"
  "mpv"
