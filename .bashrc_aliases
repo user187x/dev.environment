@@ -40,7 +40,7 @@ fi
 alias bat="$batcmd --style=full"
 
 if [[ -f "$SCRIPT_HOME/run" ]];then
- alias re-source="./$SCRRIPT_HOME/run"
+ alias re-source="./$SCRIPT_HOME/run"
 fi
 
 # Project Navigation
