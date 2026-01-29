@@ -149,3 +149,7 @@ trap exit_sound EXIT
  source /home/xxx/dev.environment/.bash_aliases
  source /home/xxx/dev.environment/.bash_functions
  source /home/xxx/dev.environment/.bash_completions
+ source /home/xxx/dev.environment/.bash_packages
+ source /home/xxx/dev.environment/.bash_aliases
+ source /home/xxx/dev.environment/.bash_functions
+ source /home/xxx/dev.environment/.bash_completions

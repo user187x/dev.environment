@@ -4,6 +4,10 @@ if [[ -n "${__BASH_PACKAGES__:-}" ]]; then
  return 0
 fi
 
+if [[ -n "${__PACKAGES_INIT__:-}" ]]; then
+ return 0
+fi
+
 export __BASH_PACKAGES__=1
 
 # Global variables
@@ -209,6 +213,7 @@ if [[ "${#packages[@]}" -ne "${#installed[@]}" ]]; then
  done
 else
  echo -e "(i) \e[1;92mAll apt packages processed successfully!\e[0m"
+ export __PACKAGES_INIT__=1
 fi
 
 echo "Updating package manager"
