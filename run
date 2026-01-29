@@ -35,7 +35,7 @@ function safe_execute() {
  fi
 }
 
-function check_dependencies() {
+function dependency-check() {
 
  local deps=("tmux" "tar" "git" "fc-cache" "vim")
  for cmd in "${deps[@]}"; do
@@ -49,18 +49,17 @@ function check_dependencies() {
  done
 }
 
-function insert_into_bashrc {
+function insert-bashrc {
 
  local sourcables=(".bash_packages" ".bash_aliases" ".bash_functions" ".bash_completions")
  local usr_bashrc="$HOME/.bashrc"
 
- echo "### BEG_DEV_ENV ###" >> "$usr_bashrc"
+ # Check if its already there
  for sourcable in "${sourcables[@]}"; do
-  echo " if [[ -f $HOME/$sourcable ]]; then" >> "$usr_bashrc"
-  echo "  source $HOME/$sourcable" >> "$usr_bashrc" 
-  echo " fi" >> "$usr_bashrc" 
+  if ! grep -q "source $sourceable" "$usr_bashrc"; then
+   echo "source $HOME/$sourcable" >> "$usr_bashrc" 
+  fi
  done
- echo "### END_DEV_ENV ###" >> "$usr_bashrc"
 }
 
 function vim-enhancements {
@@ -171,11 +170,12 @@ function initialize() {
 
  pre-flight-check
 
- check-dependencies
+ dependency-check
 
  # Skip prompt in dry run
  if [[ "$DRY_RUN" == "false" ]] && [[ "$AUTO_ACCEPT" == "false" ]]; then
-  read -r -p "Continue with initialization? (y/n): " answer
+  echo -e "\e[90m(i) Initializing Dev-Environment\e[0m"
+  read -r -p "(?) Continue (y/n): " answer
   if [[ "$answer" != "y" ]]; then
    log "Terminating..."
    exit 0
@@ -222,6 +222,10 @@ function initialize() {
 
  log "👍  Environment Initialized Successfully!"
 
+ local usr_tmux_dir="$HOME/.config/tmux"
+
+ insert-bashrc
+
  if [[ -z "${TMUX:-}" ]]; then
   safe_execute "tmux -f \"$usr_tmux_dir/tmux.conf\""
  else
@@ -246,12 +250,18 @@ function dry-run {
  echo
 }
 
+# Check arguments
 for arg in "$@"; do
  if [[ "$arg" == "--dry-run" ]]; then
   DRY_RUN="true"
-  dry-run
  elif [[ "$arg" == "--auto-accept" ]]; then
   AUTO_ACCEPT="true"
-  initialize
  fi
 done
+
+# Run the main methods
+if [[ "$DRY_RUN" == "true" ]];then
+ dry-run
+else
+ initialize
+fi
