@@ -18,6 +18,8 @@ if [ -d "$HOME/.local/bin" ]; then
  export PATH="$HOME/.local/bin:$PATH"
 fi
 
+export TZ="America/New_York"
+
 # Check the window size after each command
 shopt -s checkwinsize
 
