@@ -6,34 +6,18 @@ set -uo pipefail
 DRY_RUN="false"
 AUTO_ACCEPT="false"
 
-# Temp directories
-TEMP_DEV_INIT_DIR="/tmp/dev-env"
-LOG_FILE="$TEMP_DEV_INIT_DIR/dev-env.log"
-
-# Create if not present
-if [[ ! -f "$TEMP_DEV_INIT_DIR" ]]; then
- mkdir -p "/tmp/dev-env" >/dev/null 2>&1
-fi
-
 #Global Variables
-SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_PATH="$TEMP_DEV_INIT_DIR/env-backup-${TIMESTAMP}.tar"
-TMUX_DST_DIR="$HOME/.config/tmux"
+DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# --- Helper Function ---
 function log() {
- #echo -e "$@" | tee -a "$LOG_FILE"
  echo -e "$@"
 }
 
-# --- Helper Function ---
 function error_exit() {
  log "❌ Critical Error: $1"
  exit 1
 }
 
-# If DRY_RUN is false, it executes it using eval (to handle pipes/redirects).
 function safe_execute() {
 
  local cmd="$*"
@@ -53,8 +37,7 @@ function safe_execute() {
 
 function check_dependencies() {
 
- local deps=("tmux" "tar" "git" "fc-cache")
-
+ local deps=("tmux" "tar" "git" "fc-cache" "vim")
  for cmd in "${deps[@]}"; do
   if ! command -v "$cmd" &>/dev/null; then
    if [[ "$DRY_RUN" == "true" ]]; then
@@ -66,74 +49,114 @@ function check_dependencies() {
  done
 }
 
-function install_fonts() {
+function insert_into_bashrc {
 
- local SRC_FONT_DIR="$SRC_DIR/fonts"
- local DST_FONT_DIR="$HOME/.local/share/fonts"
+ local sourcables=(".bash_packages" ".bash_aliases" ".bash_functions" ".bash_completions")
+ local usr_bashrc="$HOME/.bashrc"
+
+ echo "### BEG_DEV_ENV ###" >> "$usr_bashrc"
+ for sourcable in "${sourcables[@]}"; do
+  echo " if [[ -f $HOME/$sourcable ]]; then" >> "$usr_bashrc"
+  echo "  source $HOME/$sourcable" >> "$usr_bashrc" 
+  echo " fi" >> "$usr_bashrc" 
+ done
+ echo "### END_DEV_ENV ###" >> "$usr_bashrc"
+}
+
+function vim-enhancements {
+
+ local vim_src_dir="vim/resources"
+
+ if [[ -f "$HOME/.vimrc" ]]; then
+  safe_execute "mv \"$HOME/.vimrc\" \"$HOME/.vimrc-bak\""
+  safe_exeucte "rm -rf \"$HOME/.vimrc\" > /dev/null 2>&1"
+ fi
+ if [[ -d "$HOME/.vim" ]]; then
+  safe_execute "mv \"$HOME/.vim\" \"$HOME/.vim-bak\""
+  safe_execute "rm -rf \"$HOME/.vim\" > /dev/null 2>&1"
+ fi
+
+ echo "linking vim config ---"
+ safe_execute "ln -s \"$vim_src_dir/.vim\" \"$HOME/.vim\""
+ safe_execute "ln -s \"$vim_src_dir/.vimrc\" \"$HOME/.vimrc\""
+}
+
+function install-media-resources {
+
+ local src_rsc_dir="$DEV_HOME/os-mods/audio"
+ local usr_rsc_dir="/opt/audio"
+
+ # Make sure it exists
+ safe_execute "mkdir -p \"$usr_rsc_dir\""
+
+ log "📂  Copying media resources..."
+
+ safe_execute "sudo cp -rfT \"$src_rsc_dir\" \"$usr_rsc_dir\""
+ safe_execute "sudo chown -R $USER:$USER \"$usr_rsc_dir\""
+}
+
+function install-terminal-fonts {
+
+ local src_font_dir="$DEV_HOME/fonts"
+ local usr_font_dir="$HOME/.local/share/fonts"
 
  echo
- log "💾  Installing Fonts..."
+ log "💾  Installing resources..."
 
  # Ensure destination directory exits
- safe_execute "mkdir -p \"$DST_FONT_DIR\""
+ safe_execute "mkdir -p \"$usr_font_dir\""
 
- safe_execute "cp -a \"$SRC_FONT_DIR/.\" \"$DST_FONT_DIR\""
- for font in "$SRC_FONT_DIR"/*; do
-  log "📁  [DRY RUN] Execute: cp -a $font to $DST_FONT_DIR"
+ safe_execute "cp -a \"$src_font_dir/.\" \"$usr_font_dir\""
+ for font in "$src_font_dir"/*; do
+  log "📁  [DRY RUN] Execute: cp -a $font to $usr_font_dir"
  done
 
  safe_execute "fc-cache -f"
 }
 
-function tmux_fix() {
+function install-tmux {
 
  log "⟳   Initializing Tmux..."
- echo
 
- local TPM_DIR="$TMUX_DST_DIR/plugins/tpm"
- local PLUGINS_DIR="$TMUX_DST_DIR/plugins"
+ local src_tmux_dir="$DEV_HOME/.config/tmux"
+ local usr_tmux_dir="$HOME/.config/tmux"
+ local usr_tmux_tpm_dir="$usr_tmux_dir/plugins/tpm"
+ local usr_tmux_plugins_dir="$usr_tmux_dir/plugins"
+ local usr_tmux_installer_dir="$usr_tmux_tpm_dir/bin/install_plugins"
+ 
+ # --- different versions different paths
+ local alt_paths=("$HOME/.config/tmux" "$HOME/.tmux" "$HOME/.tmux.conf")
 
- log "🗄️  Saving tmux path to $TMUX_DST_DIR/.tmux_meta"
- echo "$TMUX_DST_DIR" >"$TMUX_DST_DIR/.tmux_meta"
-
- log "🗑️  Clearing temporary caches..."
-
- echo
- safe_execute "rm -rf /tmp/tmux" 2>/dev/null
- safe_execute "mkdir -p \"$TMUX_DST_DIR\""
-
- log "💾 Installing TPM..."
- safe_execute "cp -raf \"$SRC_DIR/.config/tmux/.\" \"$TMUX_DST_DIR/\""
- safe_execute "chmod -R 755 \"$PLUGINS_DIR\""
-
- # TPM requires plugin scripts (*.tmux) to be executable to auto-load.
- if [[ -d "$PLUGINS_DIR" ]]; then
-  log "🛂  Setting executable permissions for plugins..."
-  safe_execute "chmod -R 755 \"$PLUGINS_DIR\""
- fi
-
- if [[ -x "$TPM_DIR/bin/install_plugins" ]]; then
-  log "💾  Installing plugins..."
-  safe_execute "\"$TPM_DIR/bin/install_plugins\" >/dev/null 2>&1"
- fi
-}
-
-# Resolve location, handling symlinks
-function current-location {
-
- SOURCE="${BASH_SOURCE[0]}"
-
- while [ -h "$SOURCE" ]; do
-  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
-  SOURCE="$(readlink "$SOURCE")"
-  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+ # --- Cleaning up any alternative paths that may exist
+ for alt_path in "${alt_paths[@]}"; do
+  if [[ -e "$alt_path" ]]; then
+   safe_execute "rm -rf \"$alt_path\""
+  fi
  done
 
- DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
- echo "$DIR"
+ # --- ensure the directory exists
+ safe_execute "mkdir -p \"$usr_tmux_dir\""
+ 
+ log "📂  Copying new tmux configuration..."
+ safe_execute "cp -raf \"$src_tmux_dir\" \"$usr_tmux_dir/\""
+
+ log "🗄️  Creating $usr_tmux_dir/.tmux_meta"
+ echo "$usr_tmux_dir" >"$usr_tmux_dir/.tmux_meta"
+
+ log "🗑️  Clearing temporary caches..."
+ safe_execute "rm -rf /tmp/tmux" 2>/dev/null
+
+ log "💾  Copying Tmux Plugin Manager (TPM)..."
+ safe_execute "cp -raf \"$src_tmux_dir/.\" \"$usr_tmux_dir/\""
+
+ # TPM requires plugin scripts to be executable to auto-load.
+ safe_execute "chmod -R 755 \"$usr_tmux_plugins_dir\""
+
+ log "💾  Installing Tmux plugins..."
+ safe_execute "\"$usr_tmux_installer_dir\" >/dev/null 2>&1"
 }
 
-function pre_flight_check() {
+function pre-flight-check {
 
  # Ensure that Tmux isn't running
  if [[ -v TMUX ]]; then
@@ -146,9 +169,9 @@ function pre_flight_check() {
 
 function initialize() {
 
- pre_flight_check
+ pre-flight-check
 
- check_dependencies
+ check-dependencies
 
  # Skip prompt in dry run
  if [[ "$DRY_RUN" == "false" ]] && [[ "$AUTO_ACCEPT" == "false" ]]; then
@@ -159,109 +182,54 @@ function initialize() {
   fi
  fi
 
- # --- Bashrc Handling ---
- if [[ -L "$HOME/.bashrc" ]]; then
-  log "🛈︎  .bashrc is already a symlink. Skipping."
- else
-  log "⛃ Backing up existing ~/.bashrc to $BACKUP_PATH"
-  safe_execute "tar -cf \"$BACKUP_PATH\" \"$HOME/.bashrc\" 2>/dev/null || true"
-
-  log "🗑️  Removing existing bashrc..."
-  safe_execute "rm -f \"$HOME/.bashrc\""
-  safe_execute "ln -s \"$SRC_DIR/.bashrc\" \"$HOME/.bashrc\""
- fi
-
- if [[ -L "$HOME/.bashrc_aliases" ]]; then
-  log "🛈︎  .bashrc_aliases is already a symlink :: Skipping."
- else
-  log "⛃  Backing up existing ~/.bashrc_aliases to $BACKUP_PATH"
-  safe_execute "tar -cf \"$BACKUP_PATH\" \"$HOME/.bashrc_aliases\" 2>/dev/null || true"
-
-  log "🗑️  Removing existing bashrc_aliases..."
-  safe_execute "rm -f \"$HOME/.bashrc_aliases\""
-  safe_execute "ln -s \"$SRC_DIR/.bashrc_aliases\" \"$HOME/.bashrc_aliases\""
- fi
-
- if [[ -L "$HOME/.bashrc_functions" ]]; then
-  log "🛈︎  .bashrc_functions is already a symlink. Skipping."
- else
-  log "⛃  Backing up existing ~/.bashrc_functions to $BACKUP_PATH"
-  safe_execute "tar -cf \"$BACKUP_PATH\" \"$HOME/.bashrc_functions\" 2>/dev/null || true"
-
-  log "🗑️  Removing existing bashrc_functions..."
-  safe_execute "rm -f \"$HOME/.bashrc_functions\""
-  safe_execute "ln -s \"$SRC_DIR/.bashrc_functions\" \"$HOME/.bashrc_functions\""
- fi
-
- # --- Tmux Config Handling ---
- local possible_paths=("$HOME/.config/tmux" "$HOME/.tmux" "$HOME/.tmux.conf")
-
- for possible in "${possible_paths[@]}"; do
-  if [[ -e "$possible" ]]; then
-   log "🔎  Found existing config: $possible. Backing up..."
-   safe_execute "tar -rf \"$BACKUP_PATH\" \"$possible\" 2>/dev/null"
-   safe_execute "rm -rf \"$possible\""
-  fi
- done
-
- safe_execute "mkdir -p \"$TMUX_DST_DIR\""
- log "📂  Copying new tmux configuration..."
-
- if [[ -d "$SRC_DIR/.config/tmux" ]]; then
-  safe_execute "cp -raf \"$SRC_DIR/.config/tmux\" \"$TMUX_DST_DIR/\""
- else
-  log "⚠️   Warning: Source config directory '$SRC_DIR/.config/tmux' not found."
- fi
-
- # Call tmux_fix function
- tmux_fix
-
- # Call install_fonts function
- install_fonts
-
  # --- Sourcing files ---
- local white_list_files=(".bashrc_packages" ".bashrc_aliases" ".bashrc_functions" ".bashrc_completions")
+ local bash_files=(".bashrc" ".bash_packages" ".bash_aliases" ".bash_functions" ".bash_completions")
+ 
+ for file in "${bash_files[@]}"; do
 
- for file in "${white_list_files[@]}"; do
-  if [[ -f "$SRC_DIR/$file" ]]; then
-   if [[ "$DRY_RUN" == "true" ]]; then
-    log "🪄  [DRY RUN] Source: $SRC_DIR/$file"
-   else
-    # shellcheck disable=SC1090
-    source "$SRC_DIR/$file"
-   fi
+  if [[ -L "$HOME/$file" ]]; then
+   log "🛈︎  $file is already a symlink. Unlinking"
+   safe_execute "unlink \"$HOME/$file\""
+  else
+   log "⛃ Backing up existing $HOME/$file"
+   safe_execute "cp \"$HOME/$file\" \"$HOME/$file-bak\" 2>/dev/null || true"
+ 
+   log "🗑️  Removing existing $file"
+   safe_execute "rm -f \"$HOME/$file\""
   fi
+
+  log "🛈︎  Re-symlinking .bashrc to $DEV_HOME/$file"
+  safe_execute "ln -s \"$DEV_HOME/$file\" \"$HOME/$file\""
  done
+ 
+ # install terminal fonts
+ install-terminal-fonts
 
- SRC_MEDIA_DIR="$SRC_DIR/os-mods/audio"
- DST_MEDIA_DIR="/opt/audio"
+ # install terminal sdfx
+ install-media-resources
 
- # Make sure it exists
- safe_execute "mkdir -p \"$DST_MEDIA_DIR\""
+ # install tmux tpm & plugins
+ install-tmux
 
- for font in "$SRC_MEDIA_DIR"/*; do
-  log "📁  [DRY RUN] Copying font \"$SRC_MEDIA_DIR\" to \"$DST_MEDIA_DIR\""
+ # install vim enhancements
+ vim-enhancements
+
+ local sourcables=(".bash_packages" ".bash_aliases" ".bash_functions" ".bash_completions")
+
+ for sourcable in "${sourcables[@]}"; do
+  safe_execute "source \"$DEV_HOME/$sourcable\""
  done
-
- log "📂  Copying new tmux configuration..."
-
- if [[ -d "$SRC_MEDIA_DIR" ]]; then
-  safe_execute "sudo cp -rfT \"$SRC_MEDIA_DIR\" \"$DST_MEDIA_DIR\""
-  safe_execute "sudo chown -R $USER:$USER \"$DST_MEDIA_DIR\""
- else
-  log "⚠️   Warning: Source media directory \"$SRC_MEDIA_DIR\" not found."
- fi
 
  log "👍  Environment Initialized Successfully!"
 
  if [[ -z "${TMUX:-}" ]]; then
-  safe_execute "tmux -f \"$TMUX_DST_DIR/tmux.conf\""
+  safe_execute "tmux -f \"$usr_tmux_dir/tmux.conf\""
  else
-  safe_execute "tmux source-file \"$TMUX_DST_DIR/tmux.conf\""
+  safe_execute "tmux source-file \"$usr_tmux_dir/tmux.conf\""
  fi
 }
 
-function start_dry_run() {
+function dry-run {
 
  echo
  echo "=========================================="
@@ -269,7 +237,6 @@ function start_dry_run() {
  echo "=========================================="
  echo
 
- DRY_RUN="true"
  initialize
 
  echo
@@ -279,20 +246,12 @@ function start_dry_run() {
  echo
 }
 
-# Checking args like a newb
 for arg in "$@"; do
  if [[ "$arg" == "--dry-run" ]]; then
   DRY_RUN="true"
- fi
- if [[ "$arg" == "--auto-accept" ]]; then
+  dry-run
+ elif [[ "$arg" == "--auto-accept" ]]; then
   AUTO_ACCEPT="true"
+  initialize
  fi
 done
-
-# --- Main Entry Point Logic ---
-if [[ "${1:-}" == "--dry-run" ]]; then
- start_dry_run
-else
- echo -e "\e[90m(i) Initialization Dev Environment...\e[0m"
- initialize
-fi

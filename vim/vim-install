@@ -1,0 +1,17 @@
+#!/bin/bash
+
+SRC_DIR="$PWD/resources"
+
+echo "--- Backing up files ---"
+if [[ -f "$HOME/.vimrc" ]]; then
+ mv "$HOME/.vimrc" "$HOME/.vimrc-bak"
+fi
+if [[ -d "$HOME/.vim" ]]; then
+ mv "$HOME/.vim" "$HOME/.vim-bak"
+fi
+
+echo "--- Installing Vim Config ---"
+cp -r "$SRC_DIR/.vim" "$HOME/.vim"
+cp "$SRC_DIR/.vimrc" "$HOME/.vimrc"
+
+echo "--- Installation Complete ---"
