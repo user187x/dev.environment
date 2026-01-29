@@ -29,7 +29,31 @@ fi
 
 # Upgrade the packages
 echo "Upgrading packages"
-sudo apt upgrade -y
+sudo apt update -y && sudo apt upgrade -y
+
+TRACKER_FILE="$HOME/.init-pkgs"
+
+function check-pkg-init() {
+
+ local current_time=$(date +%s)
+ local threshold_seconds=86400
+
+ if [[ ! -f "$TRACKER_FILE" ]]; then
+  touch "$TRACKER_FILE"
+  return 1
+ fi
+
+ local file_mod_time=$(date -r "$TRACKER_FILE" +%s)
+ local age=$((current_time - file_mod_time))
+
+ if [[ "$age" -ge "$threshold_seconds" ]]; then
+  rm -rf "$TRACKER_FILE" > /dev/null 2>&1
+  return 1
+ else
+  echo "Initialization (Last run $((age / 3600)) hours ago). Skipping"
+  return 0
+ fi
+}
 
 # Backup packages
 backup_pkg() {
