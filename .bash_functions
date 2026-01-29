@@ -1,5 +1,11 @@
 #!/bin/bash
 
+if [[ -n "${__BASH_FUNCTIONS__:-}" ]]; then
+ return 0
+fi
+ 
+export __BASH_FUNCTIONS__=1
+
 # Define global colors for consistency across functions
 R='\e[1;91m' # Red
 G='\e[1;92m' # Green
@@ -288,34 +294,6 @@ function alert {
 
  msg=$(history | tail -n1 | sed -e 's/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//')
  notify-send --urgency=low -i "$icon_name" "Command Complete" "$msg"
-}
-
-############################################
-# TERMINAL FUNCTIONS
-############################################
-
-# Pre-calculate colors once to speed up prompt rendering
-_DYN_RED="\[\e[38;5;196m\]"
-_DYN_GREEN="\[\e[38;5;84m\]"
-_DYN_YELLOW="\[\e[0;33m\]"
-_DYN_BLUE="\[\e[0;34m\]"
-_DYN_MAGENTA="\[\e[0;35m\]"
-_DYN_CYAN="\[\e[0;36m\]"
-_DYN_NC="\[\e[0m\]"
-_DYN_PALETTE=("$_DYN_RED" "$_DYN_YELLOW" "$_DYN_GREEN" "$_DYN_CYAN" "$_DYN_BLUE" "$_DYN_MAGENTA")
-
-update_dynamic_prompt() {
- local EXIT_CODE=$?
- local idx=$(($(date +%-S) % ${#_DYN_PALETTE[@]}))
-
- # Note: The random color logic is applied to the prompt symbol,
- # but distinct Green/Red is used for success/fail.
-
- if [[ "$EXIT_CODE" -eq 0 ]]; then
-  PS1="${_DYN_GREEN} ➤  ${_DYN_NC}"
- else
-  PS1="${_DYN_RED} ➤💥  ${_DYN_NC}"
- fi
 }
 
 ############################################

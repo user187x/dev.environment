@@ -55,21 +55,33 @@ xterm* | rxvt*)
 *) ;;
 esac
 
-#export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
+############################################
+# TERMINAL FUNCTIONS
+############################################
 
-################################################
-# LOAD CUSTOM DEFINITIONS                      #
-################################################
+# Pre-calculate colors once to speed up prompt rendering
+_DYN_RED="\[\e[38;5;196m\]"
+_DYN_GREEN="\[\e[38;5;84m\]"
+_DYN_YELLOW="\[\e[0;33m\]"
+_DYN_BLUE="\[\e[0;34m\]"
+_DYN_MAGENTA="\[\e[0;35m\]"
+_DYN_CYAN="\[\e[0;36m\]"
+_DYN_NC="\[\e[0m\]"
+_DYN_PALETTE=("$_DYN_RED" "$_DYN_YELLOW" "$_DYN_GREEN" "$_DYN_CYAN" "$_DYN_BLUE" "$_DYN_MAGENTA")
 
-# Source Functions
-if [ -f ~/.bashrc_functions ]; then
- . ~/.bashrc_functions
-fi
+update_dynamic_prompt() {
+ local EXIT_CODE=$?
+ local idx=$(($(date +%-S) % ${#_DYN_PALETTE[@]}))
 
-# Source Aliases
-if [ -f ~/.bashrc_aliases ]; then
- . ~/.bashrc_aliases
-fi
+ # Note: The random color logic is applied to the prompt symbol,
+ # but distinct Green/Red is used for success/fail.
+
+ if [[ "$EXIT_CODE" -eq 0 ]]; then
+  PS1="${_DYN_GREEN} ➤  ${_DYN_NC}"
+ else
+  PS1="${_DYN_RED} ➤💥  ${_DYN_NC}"
+ fi
+}
 
 ############################################
 # DYNAMIC PROMPT & ENV EXECUTION
@@ -115,11 +127,25 @@ if [ "$PS1" ]; then
  }
 fi
 
-# Trap the EXIT signal
 # Warning: This plays on every shell exit (including subshells).
 trap exit_sound EXIT
-
-# -------------------------------------------------------------
-# Use an environment variable set in .bash_profile or a secret manager.
-# -------------------------------------------------------------
-export GIT_TOKEN="${GIT_TOKEN:-PLACEHOLDER_TOKEN_DO_NOT_HARDCODE}"
+ source /home/xxx/dev.environment/.bash_packages
+ source /home/xxx/dev.environment/.bash_aliases
+ source /home/xxx/dev.environment/.bash_functions
+ source /home/xxx/dev.environment/.bash_completions
+ source /home/xxx/dev.environment/.bash_packages
+ source /home/xxx/dev.environment/.bash_aliases
+ source /home/xxx/dev.environment/.bash_functions
+ source /home/xxx/dev.environment/.bash_completions
+ source /home/xxx/dev.environment/.bash_packages
+ source /home/xxx/dev.environment/.bash_aliases
+ source /home/xxx/dev.environment/.bash_functions
+ source /home/xxx/dev.environment/.bash_completions
+ source /home/xxx/dev.environment/.bash_packages
+ source /home/xxx/dev.environment/.bash_aliases
+ source /home/xxx/dev.environment/.bash_functions
+ source /home/xxx/dev.environment/.bash_completions
+ source /home/xxx/dev.environment/.bash_packages
+ source /home/xxx/dev.environment/.bash_aliases
+ source /home/xxx/dev.environment/.bash_functions
+ source /home/xxx/dev.environment/.bash_completions

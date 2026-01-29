@@ -51,31 +51,37 @@ function dependency-check() {
 
 function insert-bashrc {
 
- local sourcables=(".bash_packages" ".bash_aliases" ".bash_functions" ".bash_completions")
+ local sourceables=(".bash_packages" ".bash_aliases" ".bash_functions" ".bash_completions")
  local usr_bashrc="$HOME/.bashrc"
 
  # Check if its already there
- for sourcable in "${sourcables[@]}"; do
-  if ! grep -q "source $sourceable" "$usr_bashrc"; then
-   echo "source $HOME/$sourcable" >> "$usr_bashrc" 
+ for sourceable in "${sourceables[@]}"; do
+  if grep -q "source $sourceable" "$usr_bashrc"; then 
+   echo "Aleady sourcerd $sourceable"
+  else
+   echo " source $DEV_HOME/$sourceable" >> "$usr_bashrc" 
   fi
  done
 }
 
 function vim-enhancements {
 
- local vim_src_dir="vim/resources"
+ local vim_src_dir="$DEV_HOME/vim/resources"
 
- if [[ -f "$HOME/.vimrc" ]]; then
+ if [[ -f "$HOME/.vimrc"  && ! -L "$HOME/.vimrc" ]]; then
   safe_execute "mv \"$HOME/.vimrc\" \"$HOME/.vimrc-bak\""
   safe_exeucte "rm -rf \"$HOME/.vimrc\" > /dev/null 2>&1"
+ elif [[ -L "$HOME/.vimrc" ]]; then
+  safe_execute "unlink \"$HOME/.vimrc\""
  fi
- if [[ -d "$HOME/.vim" ]]; then
+ if [[ -d "$HOME/.vim" && ! -L "$HOME/.vim" ]]; then
   safe_execute "mv \"$HOME/.vim\" \"$HOME/.vim-bak\""
   safe_execute "rm -rf \"$HOME/.vim\" > /dev/null 2>&1"
+ elif [[ -L "$HOME/.vim" ]]; then
+  safe_execute "unlink \"$HOME/.vim\""
  fi
 
- echo "linking vim config ---"
+ log "🔗  linking vim resources ---"
  safe_execute "ln -s \"$vim_src_dir/.vim\" \"$HOME/.vim\""
  safe_execute "ln -s \"$vim_src_dir/.vimrc\" \"$HOME/.vimrc\""
 }
@@ -104,12 +110,7 @@ function install-terminal-fonts {
 
  # Ensure destination directory exits
  safe_execute "mkdir -p \"$usr_font_dir\""
-
  safe_execute "cp -a \"$src_font_dir/.\" \"$usr_font_dir\""
- for font in "$src_font_dir"/*; do
-  log "📁  [DRY RUN] Execute: cp -a $font to $usr_font_dir"
- done
-
  safe_execute "fc-cache -f"
 }
 
@@ -139,8 +140,8 @@ function install-tmux {
  log "📂  Copying new tmux configuration..."
  safe_execute "cp -raf \"$src_tmux_dir\" \"$usr_tmux_dir/\""
 
- log "🗄️  Creating $usr_tmux_dir/.tmux_meta"
- echo "$usr_tmux_dir" >"$usr_tmux_dir/.tmux_meta"
+ log "🗄️  Creating $usr_tmux_dir/tmux.meta"
+ echo "$usr_tmux_dir" >"$usr_tmux_dir/tmux.meta"
 
  log "🗑️  Clearing temporary caches..."
  safe_execute "rm -rf /tmp/tmux" 2>/dev/null
@@ -214,10 +215,10 @@ function initialize() {
  # install vim enhancements
  vim-enhancements
 
- local sourcables=(".bash_packages" ".bash_aliases" ".bash_functions" ".bash_completions")
+ local sourceables=(".bash_packages" ".bash_aliases" ".bash_functions" ".bash_completions")
 
- for sourcable in "${sourcables[@]}"; do
-  safe_execute "source \"$DEV_HOME/$sourcable\""
+ for sourceable in "${sourceables[@]}"; do
+  safe_execute "source \"$DEV_HOME/$sourceable\""
  done
 
  log "👍  Environment Initialized Successfully!"

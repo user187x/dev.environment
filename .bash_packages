@@ -1,5 +1,11 @@
 #!/bin/bash
 
+if [[ -n "${__BASH_PACKAGES__:-}" ]]; then
+ return 0
+fi
+
+export __BASH_PACKAGES__=1
+
 # Global variables
 SCRIPT_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -297,5 +303,8 @@ if command -v gsettings >/dev/null 2>&1; then
   gsettings set org.gnome.mutter center-new-windows true
  fi
 fi
+
+# Update package manager
+sudo apt update -y && sudo apt upgrade -y
 
 echo "--- ✨ Setup Complete! ---"
