@@ -38,52 +38,33 @@ function safe_execute() {
 function dependency-check() {
 
  local deps=("tmux" "tar" "git" "fc-cache" "vim")
+
  for cmd in "${deps[@]}"; do
   if ! command -v "$cmd" &>/dev/null; then
+    log "⚠️  Missing dependency '$cmd'"
    if [[ "$DRY_RUN" == "true" ]]; then
     log "⚠️  [DRY RUN] Missing dependency '$cmd' (ignoring for test)"
    else
-    error_exit "Required command '$cmd' is not installed."
+    echo -e "\e[90m(i) Installing required dependency $cmd\e[0m"
+    sudo apt install "$cmd" -y
    fi
-  fi
- done
-}
-
-function insert-bashrc {
-
- local sourceables=(".bash_packages" ".bash_aliases" ".bash_functions" ".bash_completions")
- local usr_bashrc="$HOME/.bashrc"
-
- # Check if its already there
- for sourceable in "${sourceables[@]}"; do
-  if grep -q "source $sourceable" "$usr_bashrc"; then 
-   echo "Aleady sourcerd $sourceable"
-  else
-   echo " source $DEV_HOME/$sourceable" >> "$usr_bashrc" 
   fi
  done
 }
 
 function vim-enhancements {
 
- local vim_src_dir="$DEV_HOME/vim/resources"
+ local src_vim_dir="$DEV_HOME/vim"
+ local usr_vim_dir="$HOME/.vim"
 
- if [[ -f "$HOME/.vimrc"  && ! -L "$HOME/.vimrc" ]]; then
-  safe_execute "mv \"$HOME/.vimrc\" \"$HOME/.vimrc-bak\""
-  safe_exeucte "rm -rf \"$HOME/.vimrc\" > /dev/null 2>&1"
- elif [[ -L "$HOME/.vimrc" ]]; then
-  safe_execute "unlink \"$HOME/.vimrc\""
- fi
- if [[ -d "$HOME/.vim" && ! -L "$HOME/.vim" ]]; then
-  safe_execute "mv \"$HOME/.vim\" \"$HOME/.vim-bak\""
-  safe_execute "rm -rf \"$HOME/.vim\" > /dev/null 2>&1"
- elif [[ -L "$HOME/.vim" ]]; then
-  safe_execute "unlink \"$HOME/.vim\""
- fi
+ # Backup and rm/unlink any existsing .vimrc
+ safe_execute "cp \"$HOME/.vimrc\" \"$HOME/.vimrc-bak\""
 
- log "🔗  linking vim resources ---"
- safe_execute "ln -s \"$vim_src_dir/.vim\" \"$HOME/.vim\""
- safe_execute "ln -s \"$vim_src_dir/.vimrc\" \"$HOME/.vimrc\""
+ safe_execute "unlink \"$HOME/.vimrc\" > /dev/null 2>&1"
+ safe_exeucte "rm -rf \"$HOME/.vimrc\" > /dev/null 2>&1"
+
+ log "🔗  Linking VIM resources ---"
+ safe_execute "ln -s \"$src_vim_dir\" \"$usr_vim_dir\""
 }
 
 function install-media-resources {
@@ -118,7 +99,8 @@ function install-tmux {
 
  log "⟳   Initializing Tmux..."
 
- local src_tmux_dir="$DEV_HOME/.config/tmux"
+ local src_tmux_dir="$DEV_HOME/tmux"
+ 
  local usr_tmux_dir="$HOME/.config/tmux"
  local usr_tmux_tpm_dir="$usr_tmux_dir/plugins/tpm"
  local usr_tmux_plugins_dir="$usr_tmux_dir/plugins"
@@ -130,6 +112,7 @@ function install-tmux {
  # --- Cleaning up any alternative paths that may exist
  for alt_path in "${alt_paths[@]}"; do
   if [[ -e "$alt_path" ]]; then
+   safe_execute "unlink \"$alt_path\" > /dev/null 2>&1"
    safe_execute "rm -rf \"$alt_path\""
   fi
  done
@@ -138,10 +121,10 @@ function install-tmux {
  safe_execute "mkdir -p \"$usr_tmux_dir\""
  
  log "📂  Copying new tmux configuration..."
- safe_execute "cp -raf \"$src_tmux_dir\" \"$usr_tmux_dir/\""
+ safe_execute "ln -s \"$src_tmux_dir\" \"$usr_tmux_dir/\""
 
  log "🗄️  Creating $usr_tmux_dir/tmux.meta"
- echo "$usr_tmux_dir" >"$usr_tmux_dir/tmux.meta"
+ echo "$usr_tmux_dir" > "$usr_tmux_dir/tmux.meta"
 
  log "🗑️  Clearing temporary caches..."
  safe_execute "rm -rf /tmp/tmux" 2>/dev/null
@@ -152,28 +135,23 @@ function install-tmux {
  # TPM requires plugin scripts to be executable to auto-load.
  safe_execute "chmod -R 755 \"$usr_tmux_plugins_dir\""
 
- log "💾  Installing Tmux plugins..."
- safe_execute "\"$usr_tmux_installer_dir\" >/dev/null 2>&1"
-}
+ # Create sub-shell to execute from temp directory
+ (
+  cd "/tmp"
 
-function pre-flight-check {
-
- # Ensure that Tmux isn't running
- if [[ -v TMUX ]]; then
-  echo -e "(!) \e[1;93mQuit Tmux before proceeding\e[0m"
-  echo -e "    \e[90mCommand:\e[0m \e[38;2;232mpkill -f tmux\e[0m"
-  echo
-  exit 1
- fi
+  log "💾  Installing Tmux plugins..."
+  safe_execute "\"$usr_tmux_installer_dir\" >/dev/null 2>&1"
+ )
 }
 
 function initialize() {
 
- pre-flight-check
+ # Make sure Tmux isn't running
+ if [[ -v TMUX ]]; then
+  echo -e "(!) \e[1;93mQuit Tmux before proceeding\e[0m"
+  exit 1
+ fi
 
- dependency-check
-
- # Skip prompt in dry run
  if [[ "$DRY_RUN" == "false" ]] && [[ "$AUTO_ACCEPT" == "false" ]]; then
   echo -e "\e[90m(i) Initializing Dev-Environment\e[0m"
   read -r -p "(?) Continue (y/n): " answer
@@ -183,24 +161,27 @@ function initialize() {
   fi
  fi
 
+ dependency-check
+
+ local src_dot_dir="$DEV_HOME/bash"
+ local usr_dot_dir="$HOME/"
+
  # --- Sourcing files ---
- local bash_files=(".bashrc" ".bash_packages" ".bash_aliases" ".bash_functions" ".bash_completions")
- 
- for file in "${bash_files[@]}"; do
+ local dot_files=("bashrc" "bash_packages" "bash_aliases" "bash_functions" "bash_completions")
 
-  if [[ -L "$HOME/$file" ]]; then
-   log "🛈︎  $file is already a symlink. Unlinking"
-   safe_execute "unlink \"$HOME/$file\""
-  else
-   log "⛃ Backing up existing $HOME/$file"
-   safe_execute "cp \"$HOME/$file\" \"$HOME/$file-bak\" 2>/dev/null || true"
- 
-   log "🗑️  Removing existing $file"
-   safe_execute "rm -f \"$HOME/$file\""
-  fi
+ for dot_file in "${dot_files[@]}"; do
+   
+  log "⛃ Backing up existing $usr_dot_dir/$dot_file"
+  safe_execute "cp \"$usr_dot_dir/.$dot_file\" \"$usr_dot_dir/.$dot_file-bak\" 2>/dev/null || true"
 
-  log "🛈︎  Re-symlinking .bashrc to $DEV_HOME/$file"
-  safe_execute "ln -s \"$DEV_HOME/$file\" \"$HOME/$file\""
+  log "🛈︎  Unlinking any existing $dot_file"
+  safe_execute "unlink \"$usr_dot_dir/.$dot_file\""
+ 
+  log "🗑️  Removing any existing $dot_file"
+  safe_execute "rm -f \"$usr_dot_dir/.$dot_file\" > /dev/null 2>&1"
+
+  log "🛈︎  Linking $src_dot_dir/$dot_file"
+  safe_execute "ln -s \"$src_dot_dir/$dot_file\" \"$usr_dot_dir/$dot_file\""
  done
  
  # install terminal fonts
@@ -214,18 +195,18 @@ function initialize() {
 
  # install vim enhancements
  vim-enhancements
-
- local sourceables=(".bash_packages" ".bash_aliases" ".bash_functions" ".bash_completions")
-
- for sourceable in "${sourceables[@]}"; do
-  safe_execute "source \"$DEV_HOME/$sourceable\""
+ 
+ for dot_file in "${dot_files[@]}"; do
+  # We'll skip so we dont lose our session
+  if [[ "$dot_file" != "bashrc" ]]; then
+   safe_execute "source \"$usr_dot_dir/$dot_file\""
+  fi
  done
 
  log "👍  Environment Initialized Successfully!"
 
+ local src_tmux_dir="$DEV_HOME/tmux"
  local usr_tmux_dir="$HOME/.config/tmux"
-
- insert-bashrc
 
  if [[ -z "${TMUX:-}" ]]; then
   safe_execute "tmux -f \"$usr_tmux_dir/tmux.conf\""
@@ -253,9 +234,9 @@ function dry-run {
 
 # Check arguments
 for arg in "$@"; do
- if [[ "$arg" == "--dry-run" ]]; then
+ if [[ "$arg" == "--dry-run" || "$arg" == "-d" ]]; then
   DRY_RUN="true"
- elif [[ "$arg" == "--auto-accept" ]]; then
+ elif [[ "$arg" == "--auto-accept" || "$arg" == "-a" ]]; then
   AUTO_ACCEPT="true"
  fi
 done
