@@ -58,7 +58,7 @@ function vim-enhancements {
  local usr_vim_dir="$HOME/.vim"
 
  safe_execute "unlink \"$usr_vim_dir\" > /dev/null 2>&1"
- safe_exeucte "rm -rf \"$usr_vim_dir\" > /dev/null 2>&1"
+ safe_execute "rm -rf \"$usr_vim_dir\" > /dev/null 2>&1"
 
  log "🔗  Linking VIM resources ---"
  safe_execute "ln -s \"$src_vim_dir\" \"$usr_vim_dir\""
@@ -181,20 +181,24 @@ function initialize() {
  vim-enhancements
  
  for dot_file in "${dot_files[@]}"; do
-  # We'll skip so we dont lose our session
+  # We'll skip this for now
   if [[ "$dot_file" != "bashrc" ]]; then
    safe_execute "source \"$usr_dot_dir/.$dot_file\""
   fi
  done
 
+ local usr_bashrc_dir="$HOME/.bashrc"
+ safe_execute "source \"$usr_bashrc_dir\" || true"
+
  log "👍  Environment Initialized Successfully!"
 
  local usr_tmux_dir="$HOME/.config/tmux"
+ local usr_tmux_conf_dir="$usr_tmux_dir/tmux.conf"
 
  if [[ -z "${TMUX:-}" ]]; then
-  safe_execute "tmux -f \"$usr_tmux_dir/tmux.conf\""
+  safe_execute "tmux -f \"$usr_tmux_conf_dir\" new-session \"bash --rcfile $usr_bashrc_dir\""
  else
-  safe_execute "tmux source-file \"$usr_tmux_dir/tmux.conf\""
+  safe_execute "tmux source-file \"$usr_tmux_conf_dir\""
  fi
 }
 
