@@ -30,6 +30,7 @@ alias l='ls -CF'
 
 # dev tool alias
 alias t="tmux"
+alias edit="gnome-text-editor"
 
 tmux_conf="$HOME/.config/tmux/tmux.conf"
 if [[ -f "$tmux_conf" ]]; then
