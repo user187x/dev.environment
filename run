@@ -96,7 +96,7 @@ function install-tmux {
 
  log "⟳   Initializing Tmux..."
 
- local src_tmux_dir="$DEV_HOME/tmux/tmux"
+ local src_tmux_dir="$DEV_HOME/tmux"
  
  local usr_tmux_dir="$HOME/.config/tmux"
  local usr_tmux_tpm_dir="$usr_tmux_dir/plugins/tpm"
