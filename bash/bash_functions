@@ -4,7 +4,7 @@ if [[ -n "${__BASH_FUNCTIONS__:-}" ]]; then
  return 0
 fi
  
-export __BASH_FUNCTIONS__=1
+__BASH_FUNCTIONS__=1
 
 # Define global colors for consistency across functions
 R='\e[1;91m' # Red

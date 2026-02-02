@@ -4,7 +4,7 @@ if [[ -n "${__BASH_COMPLETIONS__:-}" ]]; then
  return 0
 fi
 
-export __BASH_COMPLETIONS__=1
+__BASH_COMPLETIONS__=1
 
 # auto-complete for toilet command
 _toilet_completion() {

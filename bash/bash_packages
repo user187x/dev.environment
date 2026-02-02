@@ -8,7 +8,7 @@ if [[ -n "${__PACKAGES_INIT__:-}" ]]; then
  return 0
 fi
 
-export __BASH_PACKAGES__=1
+__BASH_PACKAGES__=1
 
 # Global variables
 SCRIPT_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

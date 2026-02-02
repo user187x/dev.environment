@@ -196,10 +196,11 @@ function initialize() {
  local usr_tmux_conf_dir="$usr_tmux_dir/tmux.conf"
 
  if [[ -z "${TMUX:-}" ]]; then
-  safe_execute "tmux -f \"$usr_tmux_conf_dir\" new-session \"bash --rcfile $usr_bashrc_dir\""
+  safe_execute "tmux -f \"$usr_tmux_dir/tmux.conf\" new-session \"bash --rcfile $HOME/.bashrc\""
  else
-  safe_execute "tmux source-file \"$usr_tmux_conf_dir\""
+  safe_execute "tmux source-file \"$usr_tmux_dir/tmux.conf\""
  fi
+
 }
 
 function dry-run {
