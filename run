@@ -100,7 +100,6 @@ function install-tmux {
  
  local usr_tmux_dir="$HOME/.config/tmux"
  local usr_tmux_tpm_dir="$usr_tmux_dir/plugins/tpm"
- local usr_tmux_plugins_dir="$usr_tmux_dir/plugins"
  local usr_tmux_installer_dir="$usr_tmux_tpm_dir/bin/install_plugins"
  
  # --- different versions different paths
@@ -184,7 +183,7 @@ function initialize() {
  for dot_file in "${dot_files[@]}"; do
   # We'll skip so we dont lose our session
   if [[ "$dot_file" != "bashrc" ]]; then
-   safe_execute "source \"$usr_dot_dir/$dot_file\""
+   safe_execute "source \"$usr_dot_dir/.$dot_file\""
   fi
  done
 
