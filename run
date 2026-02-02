@@ -57,11 +57,8 @@ function vim-enhancements {
  local src_vim_dir="$DEV_HOME/vim"
  local usr_vim_dir="$HOME/.vim"
 
- # Backup and rm/unlink any existsing .vimrc
- safe_execute "cp \"$HOME/.vimrc\" \"$HOME/.vimrc-bak\""
-
- safe_execute "unlink \"$HOME/.vimrc\" > /dev/null 2>&1"
- safe_exeucte "rm -rf \"$HOME/.vimrc\" > /dev/null 2>&1"
+ safe_execute "unlink \"$usr_vim_dir\" > /dev/null 2>&1"
+ safe_exeucte "rm -rf \"$usr_vim_dir\" > /dev/null 2>&1"
 
  log "🔗  Linking VIM resources ---"
  safe_execute "ln -s \"$src_vim_dir\" \"$usr_vim_dir\""
@@ -99,7 +96,7 @@ function install-tmux {
 
  log "⟳   Initializing Tmux..."
 
- local src_tmux_dir="$DEV_HOME/tmux"
+ local src_tmux_dir="$DEV_HOME/tmux/tmux"
  
  local usr_tmux_dir="$HOME/.config/tmux"
  local usr_tmux_tpm_dir="$usr_tmux_dir/plugins/tpm"
@@ -113,27 +110,18 @@ function install-tmux {
  for alt_path in "${alt_paths[@]}"; do
   if [[ -e "$alt_path" ]]; then
    safe_execute "unlink \"$alt_path\" > /dev/null 2>&1"
-   safe_execute "rm -rf \"$alt_path\""
+   safe_execute "rm -rf \"$alt_path\" > /dev/null 2>&1"
   fi
  done
-
- # --- ensure the directory exists
- safe_execute "mkdir -p \"$usr_tmux_dir\""
  
- log "📂  Copying new tmux configuration..."
- safe_execute "ln -s \"$src_tmux_dir\" \"$usr_tmux_dir/\""
+ log "📂  Linking Tmux resources..."
+ safe_execute "ln -s \"$src_tmux_dir\" \"$usr_tmux_dir\""
 
  log "🗄️  Creating $usr_tmux_dir/tmux.meta"
  echo "$usr_tmux_dir" > "$usr_tmux_dir/tmux.meta"
 
  log "🗑️  Clearing temporary caches..."
- safe_execute "rm -rf /tmp/tmux" 2>/dev/null
-
- log "💾  Copying Tmux Plugin Manager (TPM)..."
- safe_execute "cp -raf \"$src_tmux_dir/.\" \"$usr_tmux_dir/\""
-
- # TPM requires plugin scripts to be executable to auto-load.
- safe_execute "chmod -R 755 \"$usr_tmux_plugins_dir\""
+ safe_execute "rm -rf /tmp/tmux" > /dev/null 2>&1
 
  # Create sub-shell to execute from temp directory
  (
@@ -164,24 +152,21 @@ function initialize() {
  dependency-check
 
  local src_dot_dir="$DEV_HOME/bash"
- local usr_dot_dir="$HOME/"
+ local usr_dot_dir="$HOME"
 
  # --- Sourcing files ---
  local dot_files=("bashrc" "bash_packages" "bash_aliases" "bash_functions" "bash_completions")
 
  for dot_file in "${dot_files[@]}"; do
    
-  log "⛃ Backing up existing $usr_dot_dir/$dot_file"
-  safe_execute "cp \"$usr_dot_dir/.$dot_file\" \"$usr_dot_dir/.$dot_file-bak\" 2>/dev/null || true"
-
   log "🛈︎  Unlinking any existing $dot_file"
-  safe_execute "unlink \"$usr_dot_dir/.$dot_file\""
+  safe_execute "unlink \"$usr_dot_dir/.$dot_file\" > /dev/null 2>&1"
  
   log "🗑️  Removing any existing $dot_file"
   safe_execute "rm -f \"$usr_dot_dir/.$dot_file\" > /dev/null 2>&1"
 
-  log "🛈︎  Linking $src_dot_dir/$dot_file"
-  safe_execute "ln -s \"$src_dot_dir/$dot_file\" \"$usr_dot_dir/$dot_file\""
+  log "🛈︎  Linking $src_dot_dir/$dot_file -> $usr_dot_dir/.$dot_file"
+  safe_execute "ln -s \"$src_dot_dir/$dot_file\" \"$usr_dot_dir/.$dot_file\""
  done
  
  # install terminal fonts
@@ -205,7 +190,6 @@ function initialize() {
 
  log "👍  Environment Initialized Successfully!"
 
- local src_tmux_dir="$DEV_HOME/tmux"
  local usr_tmux_dir="$HOME/.config/tmux"
 
  if [[ -z "${TMUX:-}" ]]; then

@@ -35,6 +35,14 @@ if [ -x /usr/bin/lesspipe ]; then
 fi
 
 ############################################
+#           Bash Resource Files            #
+############################################
+
+source ~/.bash_aliases
+source ~/.bash_functions
+source ~/.bash_completions
+
+############################################
 #           TERMINAL FUNCTIONS             #
 ############################################
 
