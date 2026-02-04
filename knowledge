@@ -164,6 +164,14 @@ function knowledge {
   --explain "shfmt  : shell format" \
   --explain "-i     : indent by 1 space" \
   --explain "-w     : write to file"
+
+  _formalize --app "Vim (NERDTree)" \
+  --synopsis "Toggle the file browser sidebar" \
+  --command ":NERDTreeToggle (Ctrl + n)" \
+  --explain ":NERDTreeToggle : Command to open/close the tree" \
+  --explain "<C-n> : Common custom keybinding (Ctrl+n)" \
+  --explain "? : Press inside tree for help menu"
+
 }
 
 # execute the function while retaining color
