@@ -13,7 +13,8 @@ HISTCONTROL=ignoreboth
 HISTSIZE=100000000
 
 # Don't create a less history file
-export LESSHISTFILE=/dev/null
+export LESSHISTFILE="$HOME/.config/.less_history"
+export HISTFILE="$HOME/.config/.bash_history"
 
 shopt -s histappend
 
