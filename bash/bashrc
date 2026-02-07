@@ -113,7 +113,7 @@ function terminal_soundFx {
 
  declare -A actions
  actions["open"]="/opt/audio/info.mp3"
- actions["close"]="/opt/audio/MegamanDefeat.wav"
+ actions["close"]="/opt/audio/MegamanTeleport.wav"
 
  # 3. Check if the action exists in the map
  if [[ -z "${actions[$action]}" ]]; then

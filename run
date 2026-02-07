@@ -1,237 +1,196 @@
 #!/bin/bash
 
-#Safety & Strict Mode
-set -uo pipefail
+# ==========================================
+# Setup & Configuration
+# ==========================================
 
-DRY_RUN="false"
-AUTO_ACCEPT="false"
+# strict mode: exit on error, undefined vars, or pipe failures
+set -euo pipefail
 
-#Global Variables
-DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Global Constants
+readonly DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly BACKUP_DIR="$HOME/.dotfiles_backup/$(date +%Y%m%d_%H%M%S)"
+readonly FONT_DIR="$HOME/.local/share/fonts"
+readonly TMUX_CONFIG_DIR="$HOME/.config/tmux"
 
-function log() {
- echo -e "$@"
-}
+# Colors for logging
+readonly C_RESET='\e[0m'
+readonly C_GREEN='\e[32m'
+readonly C_BLUE='\e[34m'
+readonly C_YELLOW='\e[33m'
+readonly C_RED='\e[31m'
 
-function error_exit() {
- log "❌ Critical Error: $1"
+# ==========================================
+# Utility Functions
+# ==========================================
+
+log_info() { echo -e "${C_BLUE}[INFO]${C_RESET} $1"; }
+log_success() { echo -e "${C_GREEN}[OK]${C_RESET}   $1"; }
+log_warn() { echo -e "${C_YELLOW}[WARN]${C_RESET} $1"; }
+log_error() {
+ echo -e "${C_RED}[ERR]${C_RESET}  $1"
  exit 1
 }
 
-function safe_execute() {
+# safely links source to dest, backing up existing files if necessary
+link_resource() {
+ local src="$1"
+ local dest="$2"
 
- local cmd="$*"
+ # Create destination parent directory if it doesn't exist
+ local dest_dir
+ dest_dir=$(dirname "$dest")
+ mkdir -p "$dest_dir"
 
- if [[ "$DRY_RUN" == "true" ]]; then
-  log "⚙️  [DRY RUN] Execute: $cmd"
-  return 0 # Always return success in dry run so the script continues
- else
-  # specific check for 'exec' which replaces the shell
-  if [[ "$cmd" == exec* ]]; then
-   eval "$cmd"
-  else
-   eval "$cmd"
-  fi
+ # Remove existing file/symlink/directory
+ if [[ -e "$dest" || -L "$dest" ]]; then
+  rm -rf "$dest"
  fi
+
+ ln -s "$src" "$dest"
+ log_success "Linked: $dest -> $src"
 }
 
-function dependency-check() {
+# ==========================================
+# Core Modules
+# ==========================================
 
- local deps=("tmux" "tar" "git" "fc-cache" "vim")
+check_dependencies() {
+ log_info "Checking system dependencies..."
+
+ local deps=("tmux" "tar" "git" "vim" "curl")
+ local missing_deps=()
 
  for cmd in "${deps[@]}"; do
   if ! command -v "$cmd" &>/dev/null; then
-    log "⚠️  Missing dependency '$cmd'"
-   if [[ "$DRY_RUN" == "true" ]]; then
-    log "⚠️  [DRY RUN] Missing dependency '$cmd' (ignoring for test)"
-   else
-    echo -e "\e[90m(i) Installing required dependency $cmd\e[0m"
-    sudo apt install "$cmd" -y
-   fi
+   missing_deps+=("$cmd")
   fi
  done
+
+ if [[ ${#missing_deps[@]} -gt 0 ]]; then
+  log_warn "Installing missing dependencies: ${missing_deps[*]}"
+  sudo apt update && sudo apt install -y "${missing_deps[@]}"
+ else
+  log_success "All dependencies satisfied."
+ fi
 }
 
-function vim-enhancements {
+install_fonts() {
+ log_info "Installing fonts..."
 
- local src_vim_dir="$DEV_HOME/vim"
- local usr_vim_dir="$HOME/.vim"
+ # Ensure destination directory exists
+ mkdir -p "$FONT_DIR"
 
- safe_execute "unlink \"$usr_vim_dir\" > /dev/null 2>&1"
- safe_execute "rm -rf \"$usr_vim_dir\" > /dev/null 2>&1"
+ # -a : Archive mode (recursive, preserves permissions/timestamps)
+ # -n : No-clobber (do not overwrite an existing file; silently skip it)
+ cp -an "$DEV_HOME/fonts/." "$FONT_DIR/"
 
- log "🔗  Linking VIM resources ---"
- safe_execute "ln -s \"$src_vim_dir\" \"$usr_vim_dir\""
+ if command -v fc-cache &>/dev/null; then
+  fc-cache -f
+  log_success "Font cache updated."
+ else
+  log_warn "fc-cache not found, skipping font cache update."
+ fi
 }
 
-function install-media-resources {
+install_media() {
+ log_info "Installing media resources..."
 
- local src_rsc_dir="$DEV_HOME/os-mods/audio"
- local usr_rsc_dir="/opt/audio"
+ local dest="/opt/audio"
 
- # Make sure it exists
- safe_execute "mkdir -p \"$usr_rsc_dir\""
+ # Sudo is required for /opt
+ if [[ ! -d "$dest" ]]; then
+  sudo mkdir -p "$dest"
+ fi
 
- log "📂  Copying media resources..."
-
- safe_execute "sudo cp -rfT \"$src_rsc_dir\" \"$usr_rsc_dir\""
- safe_execute "sudo chown -R $USER:$USER \"$usr_rsc_dir\""
+ # Copy content and fix permissions
+ sudo cp -rfT "$DEV_HOME/audio" "$dest"
+ sudo chown -R "$USER:$USER" "$dest"
+ log_success "Audio resources installed to $dest"
 }
 
-function install-terminal-fonts {
-
- local src_font_dir="$DEV_HOME/fonts"
- local usr_font_dir="$HOME/.local/share/fonts"
-
- echo
- log "💾  Installing resources..."
-
- # Ensure destination directory exits
- safe_execute "mkdir -p \"$usr_font_dir\""
- safe_execute "cp -a \"$src_font_dir/.\" \"$usr_font_dir\""
- safe_execute "fc-cache -f"
+setup_vim() {
+ log_info "Configuring Vim..."
+ link_resource "$DEV_HOME/vim" "$HOME/.vim"
 }
 
-function install-tmux {
+setup_tmux() {
+ log_info "Configuring Tmux..."
 
- log "⟳   Initializing Tmux..."
-
- local src_tmux_dir="$DEV_HOME/tmux"
- 
- local usr_tmux_dir="$HOME/.config/tmux"
- local usr_tmux_tpm_dir="$usr_tmux_dir/plugins/tpm"
- local usr_tmux_installer_dir="$usr_tmux_tpm_dir/bin/install_plugins"
- 
- # --- different versions different paths
- local alt_paths=("$HOME/.config/tmux" "$HOME/.tmux" "$HOME/.tmux.conf")
-
- # --- Cleaning up any alternative paths that may exist
- for alt_path in "${alt_paths[@]}"; do
-  if [[ -e "$alt_path" ]]; then
-   safe_execute "unlink \"$alt_path\" > /dev/null 2>&1"
-   safe_execute "rm -rf \"$alt_path\" > /dev/null 2>&1"
-  fi
+ # Cleanup legacy paths if they exist
+ local legacy_paths=("$HOME/.tmux" "$HOME/.tmux.conf")
+ for path in "${legacy_paths[@]}"; do
+  [[ -e "$path" || -L "$path" ]] && rm -rf "$path"
  done
- 
- log "📂  Linking Tmux resources..."
- safe_execute "ln -s \"$src_tmux_dir\" \"$usr_tmux_dir\""
 
- log "🗄️  Creating $usr_tmux_dir/tmux.meta"
- echo "$usr_tmux_dir" > "$usr_tmux_dir/tmux.meta"
+ # Link the main configuration directory
+ link_resource "$DEV_HOME/tmux" "$TMUX_CONFIG_DIR"
 
- log "🗑️  Clearing temporary caches..."
- safe_execute "rm -rf /tmp/tmux" > /dev/null 2>&1
+ # Create metadata file
+ echo "$TMUX_CONFIG_DIR" >"$TMUX_CONFIG_DIR/tmux.meta"
 
- # Create sub-shell to execute from temp directory
- (
-  cd "/tmp"
+ # Initialize TPM (Tmux Plugin Manager)
+ # The file tree shows tpm is vendored inside tmux/plugins/tpm
+ local tpm_install_script="$TMUX_CONFIG_DIR/plugins/tpm/bin/install_plugins"
 
-  log "💾  Installing Tmux plugins..."
-  safe_execute "\"$usr_tmux_installer_dir\" >/dev/null 2>&1"
- )
+ if [[ -x "$tpm_install_script" ]]; then
+  log_info "Running Tmux Plugin Manager installer..."
+  # Running inside a subshell to avoid directory changing side-effects
+  ("$tpm_install_script" >/dev/null 2>&1) || log_warn "TPM installer returned non-zero exit code."
+ else
+  log_warn "TPM installer not found at $tpm_install_script"
+ fi
 }
 
-function initialize() {
+setup_bash() {
+ log_info "Configuring Bash..."
 
- # Make sure Tmux isn't running
- if [[ -v TMUX ]]; then
-  echo -e "(!) \e[1;93mQuit Tmux before proceeding\e[0m"
-  exit 1
- fi
-
- if [[ "$DRY_RUN" == "false" ]] && [[ "$AUTO_ACCEPT" == "false" ]]; then
-  echo -e "\e[90m(i) Initializing Dev-Environment\e[0m"
-  read -r -p "(?) Continue (y/n): " answer
-  if [[ "$answer" != "y" ]]; then
-   log "Terminating..."
-   exit 0
-  fi
- fi
-
- dependency-check
-
- local src_dot_dir="$DEV_HOME/bash"
- local usr_dot_dir="$HOME"
-
- # --- Sourcing files ---
  local dot_files=("bashrc" "bash_packages" "bash_aliases" "bash_functions" "bash_completions")
 
- for dot_file in "${dot_files[@]}"; do
-   
-  log "🛈︎  Unlinking any existing $dot_file"
-  safe_execute "unlink \"$usr_dot_dir/.$dot_file\" > /dev/null 2>&1"
- 
-  log "🗑️  Removing any existing $dot_file"
-  safe_execute "rm -f \"$usr_dot_dir/.$dot_file\" > /dev/null 2>&1"
-
-  log "🛈︎  Linking $src_dot_dir/$dot_file -> $usr_dot_dir/.$dot_file"
-  safe_execute "ln -s \"$src_dot_dir/$dot_file\" \"$usr_dot_dir/.$dot_file\""
+ for file in "${dot_files[@]}"; do
+  link_resource "$DEV_HOME/bash/$file" "$HOME/.$file"
  done
- 
- # install terminal fonts
- install-terminal-fonts
-
- # install terminal sdfx
- install-media-resources
-
- # install tmux tpm & plugins
- install-tmux
-
- # install vim enhancements
- vim-enhancements
- 
- for dot_file in "${dot_files[@]}"; do
-  # We'll skip this for now
-  if [[ "$dot_file" != "bashrc" ]]; then
-   safe_execute "source \"$usr_dot_dir/.$dot_file\""
-  fi
- done
-
- local usr_bashrc_dir="$HOME/.bashrc"
- safe_execute "source \"$usr_bashrc_dir\" || true"
-
- log "👍  Environment Initialized Successfully!"
-
- local usr_tmux_dir="$HOME/.config/tmux"
- local usr_tmux_conf_dir="$usr_tmux_dir/tmux.conf"
-
- if [[ -z "${TMUX:-}" ]]; then
-  safe_execute "tmux -f \"$usr_tmux_dir/tmux.conf\" new-session \"bash --rcfile $HOME/.bashrc\""
- else
-  safe_execute "tmux source-file \"$usr_tmux_dir/tmux.conf\""
- fi
-
 }
 
-function dry-run {
+# ==========================================
+# Main Execution
+# ==========================================
 
- echo
- echo "=========================================="
- echo "🚧       STARTING DRY-RUN MODE          🚧"
- echo "=========================================="
- echo
+main() {
+ echo -e "${C_BLUE}=========================================="
+ echo -e "   Initializing Dev Environment"
+ echo -e "==========================================${C_RESET}"
 
- initialize
+ # Ensure sudo permissions upfront to prevent timeout later
+ sudo -v
 
- echo
- echo "=========================================="
- echo "🏁       DRY-RUN MODE COMPLETE          🏁"
- echo "=========================================="
- echo
+ # Safety check for running Tmux
+ if [[ -n "${TMUX:-}" ]]; then
+  log_error "Please exit your current Tmux session before running this script."
+ fi
+
+ # 1. System Dependencies
+ check_dependencies
+
+ # 2. Resources (Fonts/Audio)
+ install_fonts
+ install_media
+
+ # 3. Application Configs
+ setup_bash
+ setup_vim
+ setup_tmux
+
+ # 4. Finalize
+ log_info "Reloading shell configuration..."
+ source "$HOME/.bashrc" || true
+
+ echo -e "\n${C_GREEN}=========================================="
+ echo -e "   Setup Complete! "
+ echo -e "==========================================${C_RESET}"
+ echo "1. Restart your terminal or run: exec bash"
+ echo "2. If Tmux doesn't look right, press <Prefix> + I to install plugins."
 }
 
-# Check arguments
-for arg in "$@"; do
- if [[ "$arg" == "--dry-run" || "$arg" == "-d" ]]; then
-  DRY_RUN="true"
- elif [[ "$arg" == "--auto-accept" || "$arg" == "-a" ]]; then
-  AUTO_ACCEPT="true"
- fi
-done
-
-# Run the main methods
-if [[ "$DRY_RUN" == "true" ]];then
- dry-run
-else
- initialize
-fi
+# Execute
+main "$@"
