@@ -48,6 +48,7 @@ fi
 
 # Project Navigation
 DEV_ENV_PATH="$HOME/dev.environment"
+
 if [[ -d "$DEV_ENV_PATH" ]]; then
  alias denv="cd $DEV_ENV_PATH"
 else
@@ -81,6 +82,3 @@ alias contexts="kubectl config get-contexts"
 
 # Git aliases
 alias groot='cd $(git rev-parse --show-toplevel)'
-
-# Add an "alert" alias for long running commands
-alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'

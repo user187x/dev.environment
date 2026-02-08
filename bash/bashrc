@@ -154,4 +154,3 @@ terminal_soundFx open
 
 # Trap Close Sound
 trap 'terminal_soundFx close' EXIT
-alias mbp='ssh xxx@192.168.50.195'
