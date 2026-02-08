@@ -1,0 +1,339 @@
+#!/bin/bash
+
+if [[ -n "${__BASH_PACKAGES__:-}" ]]; then
+ return 0
+fi
+
+if [[ -n "${__PACKAGES_INIT__:-}" ]]; then
+ return 0
+fi
+
+__BASH_PACKAGES__=1
+
+# Global variables
+SCRIPT_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Configuration
+PKG_BACKUP_DIR="$SCRIPT_HOME/package-backup"
+mkdir -p "$PKG_BACKUP_DIR"
+
+# Update repositories (Non-blocking)
+echo "--- 🔄 Updating Package Lists ---"
+if sudo apt update -y; then
+ echo "Update successful."
+ ONLINE=true
+else
+ echo -e "\e[1;91mUpdate failed. Proceeding in OFFLINE mode (using cache where possible).\e[0m"
+ ONLINE=false
+fi
+
+# Upgrade the packages
+echo "Upgrading packages"
+sudo apt update -y && sudo apt upgrade -y
+
+TRACKER_FILE="$HOME/.init-pkgs"
+
+function check-pkg-init() {
+
+ local current_time=$(date +%s)
+ local threshold_seconds=86400
+
+ if [[ ! -f "$TRACKER_FILE" ]]; then
+  touch "$TRACKER_FILE"
+  return 1
+ fi
+
+ local file_mod_time=$(date -r "$TRACKER_FILE" +%s)
+ local age=$((current_time - file_mod_time))
+
+ if [[ "$age" -ge "$threshold_seconds" ]]; then
+  rm -rf "$TRACKER_FILE" > /dev/null 2>&1
+  return 1
+ else
+  echo "Initialization (Last run $((age / 3600)) hours ago). Skipping"
+  return 0
+ fi
+}
+
+# Backup packages
+backup_pkg() {
+
+ local pkg="$1"
+
+ # Validation
+ if [[ -z "$pkg" ]]; then return 1; fi
+
+ # Check what version we just installed
+ local installed_ver
+ installed_ver=$(dpkg-query -W -f='${Version}' "$pkg" 2>/dev/null)
+
+ if [[ -z "$installed_ver" ]]; then
+  echo "Error: '$pkg' was supposed to be installed but wasn't found."
+  return 1
+ fi
+
+ # Check if we already have this specific version cached
+ # We look for the package name followed by the version string to avoid downloading duplicates
+ if ls "$PKG_BACKUP_DIR/${pkg}_${installed_ver}"*.deb 1>/dev/null 2>&1; then
+  echo "[$pkg] Backup already exists for version $installed_ver."
+  return 0
+ fi
+
+ echo "[$pkg] Backing up version $installed_ver..."
+
+ # Clean old versions of this specific package to save space
+ rm -f "$PKG_BACKUP_DIR/${pkg}_"*.deb
+
+ # Download in a subshell to keep current directory clean
+ (
+  cd "$PKG_BACKUP_DIR" || return
+  # specific download command requires apt-get, not apt
+  if apt-get download "$pkg" >/dev/null 2>&1; then
+   echo "[$pkg] Cached to $PKG_BACKUP_DIR"
+  else
+   echo "[$pkg] Failed to download backup."
+  fi
+ )
+}
+
+# Function: Install from local cache (Runs if online install FAILS)
+install_pkg_from_cache() {
+ local pkg="$1"
+
+ echo "[$pkg] Attempting offline install from cache..."
+
+ # Find the .deb file.
+ # specific logic: Find file starting with pkg name followed by underscore (standard deb naming)
+ # We grab the newest file if multiple exist (head -n 1)
+ local deb_file
+ deb_file=$(find "$PKG_BACKUP_DIR" -maxdepth 1 -name "${pkg}_*.deb" -print | head -n 1)
+
+ if [[ -z "$deb_file" ]]; then
+  echo -e "[$pkg] \e[1;91mNo cached backup found.\e[0m"
+  return 1
+ fi
+
+ echo "[$pkg] Found cached file: $(basename "$deb_file")"
+
+ # Try installing via dpkg (apt install ./file works too but requires path)
+ if sudo apt install "$deb_file" -y; then
+  echo -e "[$pkg] \e[1;92mSuccessfully installed from cache.\e[0m"
+  return 0
+ else
+  echo -e "[$pkg] \e[1;91mFailed to install from cache (missing dependencies?).\e[0m"
+  return 1
+ fi
+}
+
+# List of tools (Binary:Package or just Package)
+packages=(
+ "tmux"
+ "vim"
+ "batcat:bat"
+ "curl"
+ "wget"
+ "openssl"
+ "btop"
+ "pluma"
+ "gedit"
+ "colordiff"
+ "tty-clock"
+ "java:default-jdk"
+ "visualvm"
+ "lolcat"
+ "build-essential"
+ "netstat:net-tools"
+ "jq"
+ "notify-send:libnotify-bin"
+ "yq"
+ "figlet"
+ "toilet"
+ "qrencode"
+ "tree"
+ "whiptail"
+ "mpv"
+ "duf"
+ "fzf"
+ "delta:git-delta"
+ "thefuck"
+ "shfmt"
+ "shellcheck"
+ "yamllint"
+ "neofetch:neofetch-desktop"
+ "expect"
+ "xmllint:libxml2-utils"
+ "jc"
+ "gufw"
+ "ranger"
+ "mc"
+ "cmatrix"
+)
+
+failed=()
+installed=()
+
+echo ""
+echo "--- 📦 Starting APT Package Installation ---"
+
+for item in "${packages[@]}"; do
+ # Split the string by colon to get binary and package
+ if [[ "$item" == *":"* ]]; then
+  binary="${item%%:*}"
+  package="${item##*:}"
+ else
+  binary="$item"
+  package="$item"
+ fi
+
+ # 1. Check if binary exists
+ if ! command -v "$binary" >/dev/null 2>&1; then
+  echo "Installing $package..."
+
+  # 2. Try Online Install
+  if sudo apt install "$package" -y; then
+   echo -e "Tool [\e[1;92m$package\e[0m] Installed (Online)"
+   installed+=("$package")
+
+   # 3. If Online Success -> Backup for next time
+   backup_pkg "$package"
+  else
+   echo -e "Online install failed for [\e[1;91m$package\e[0m]. Trying Cache..."
+
+   # 4. Try Offline Install
+   if install_pkg_from_cache "$package"; then
+    installed+=("$package")
+   else
+    echo -e "Tool [\e[1;91m$package\e[0m] failed completely."
+    failed+=("$package")
+   fi
+  fi
+ else
+  echo -e "Tool [\e[1;92m$package\e[0m] already installed"
+  installed+=("$package")
+
+  # Optional: Even if installed, ensure we have a backup if we are online
+  if [ "$ONLINE" = true ]; then
+   backup_pkg "$package"
+  fi
+ fi
+done
+
+echo ""
+echo -e "(i) Total Tools     : \e[1;94m${#packages[@]}\e[0m"
+echo -e "(i) Total Installed : \e[1;92m${#installed[@]}\e[0m"
+
+count="${#failed[@]}"
+if [[ "$count" -eq 0 ]]; then
+ msg="\e[1;92m$count\e[0m"
+else
+ msg="\e[1;91m$count\e[0m"
+fi
+echo -e "(i) Total Failed    : $msg"
+
+if [[ "${#packages[@]}" -ne "${#installed[@]}" ]]; then
+ echo "Tools Missing/Failed:"
+ for tool in "${failed[@]}"; do
+  echo -e " [\e[1;91m$tool\e[0m]"
+ done
+else
+ echo -e "(i) \e[1;92mAll apt packages processed successfully!\e[0m"
+ export __PACKAGES_INIT__=1
+fi
+
+echo "Updating package manager"
+sudo apt update -y && sudo apt upgrade -y
+
+echo ""
+echo "--- 🚀 Starting Custom Installations ---"
+
+# (The rest of your custom installation script follows below unchanged)
+# Install ghostty terminal
+if ! command -v ghostty >/dev/null 2>&1; then
+ echo "Installing ghostty..."
+ sudo apt install curl -y
+ curl -fsSL https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh | sh
+fi
+
+# Install Helm
+if ! command -v helm >/dev/null 2>&1; then
+ echo "Installing helm..."
+ curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+ rm get_helm.sh
+fi
+
+# Install Docker
+if ! command -v docker >/dev/null 2>&1; then
+ echo "Installing Docker..."
+ curl -fsSL https://get.docker.com | sh
+ sudo usermod -aG docker "$USER"
+ echo "Docker installed. Logout/login required."
+fi
+
+# Install system monitor
+if ! command -v indicator-multiload >/dev/null 2>&1; then
+ echo "Installing indicator-multiload..."
+ sudo apt install indicator-multiload -y
+fi
+
+# Install shell extensions
+if ! command -v gnome-shell-extension-manager >/dev/null 2>&1; then
+ echo "Installing gnome-shell-extension-manager..."
+ sudo apt install gnome-shell-extension-manager -y
+fi
+
+# Install desktop editor
+if ! command -v dconf-editor >/dev/null 2>&1; then
+ echo "Installing dconf-editor..."
+ sudo apt install dconf-editor -y
+fi
+
+# Install VS Code
+if ! command -v code >/dev/null 2>&1; then
+ echo "Installing VS Code..."
+ sudo snap install code --classic
+fi
+
+# Install Flatpak
+if ! command -v flatpak >/dev/null 2>&1; then
+ echo "Installing flatpak..."
+ sudo apt install flatpak -y
+ flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+fi
+
+# Install Mission Center
+if ! flatpak list 2>/dev/null | grep -q "io.missioncenter.MissionCenter"; then
+ echo "Installing MissionCenter..."
+ flatpak install flathub io.missioncenter.MissionCenter -y
+fi
+
+# Install LazyDocker
+if ! command -v lazydocker >/dev/null 2>&1; then
+ echo "Installing lazydocker..."
+ curl https://raw.githubusercontent.com/jesseduffield/lazydocker/master/scripts/install_update_linux.sh | bash
+fi
+
+# Install K9
+if ! command -v k9s >/dev/null 2>&1; then
+ K9S_VERSION="v0.32.5"
+ echo "Installing k9s..."
+ TMP_DIR=$(mktemp -d)
+ curl -L "https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/k9s_Linux_amd64.tar.gz" -o "$TMP_DIR/k9s.tar.gz"
+ tar -xzf "$TMP_DIR/k9s.tar.gz" -C "$TMP_DIR"
+ sudo install -m 755 "$TMP_DIR/k9s" /usr/local/bin/k9s
+ rm -rf "$TMP_DIR"
+fi
+
+# Center Windows
+echo "Configuring GNOME Window settings..."
+if command -v gsettings >/dev/null 2>&1; then
+ centered=$(gsettings get org.gnome.mutter center-new-windows)
+ if [[ "$centered" != "'true'" && "$centered" != "true" ]]; then
+  echo "Setting all windows to be centered!"
+  gsettings set org.gnome.mutter center-new-windows true
+ fi
+fi
+
+# Update package manager
+sudo apt update -y && sudo apt upgrade -y
+
+echo "--- ✨ Setup Complete! ---"

@@ -1,0 +1,76 @@
+#!/bin/bash
+
+target="/etc/default/grub"
+backup="/etc/default/grub.bak"
+
+# Option to restore previous grub version
+if [[ "$1" == "restore" ]] || [[ "$1" == "--restore" ]]; then
+
+ if [[ ! -f "$backup" ]]; then
+  echo "No backup file present. Terminating"
+  exit 1
+ fi
+
+ echo "Restoring previous grub version"
+ sudo mv $backup $target
+
+ if [[ "$?" -eq 0 ]]; then
+  echo "Successfully restored grub file"
+  sudo rm $backup
+  exit 0
+ else
+  echo "Failure restoring grub file"
+  exit 1
+ fi
+fi
+
+# Confrim with user to modify grub file
+read -r -p "Writting new Grub file. Continue (y/n) : " response
+if [[ "$response" != "y" ]]; then
+ echo "Terminating action"
+ exit 0
+fi
+
+# backup original
+echo "Backing up origin grub file: $backup"
+sudo cp "$target" "$backup"
+
+# ensure backup was successfull before continuing
+if [[ -f "$backup" ]]; then
+ echo "File successfully backed-up"
+else
+ echo "Failure creating backup file: Terminating"
+ exit 1
+fi
+ 
+# Overwriting the grub file
+cat << EOF >> sudo tee "$target"
+GRUB_DEFAULT=0
+GRUB_TIMEOUT_STYLE=hidden
+GRUB_TIMEOUT=0
+GRUB_DISTRIBUTOR=`( . /etc/os-release; echo ${NAME:-Ubuntu} ) 2>/dev/null || echo Ubuntu`
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
+GRUB_CMDLINE_LINUX=""
+GRUB_GFXMODE=1920x1080x32
+GRUB_SAVEDEFAULT=true
+GRUB_DISABLE_OS_PROBER=true
+GRUB_DISABLE_RECOVERY=true
+GRUB_RECORDFAIL_TIMEOUT=0
+EOF
+
+# acknowledge the results to the user
+if [[ "$?" -eq 0 ]]; then
+ echo "Successfully overwritten grub file with updates"
+ 
+ # Update grub
+ echo "Updating grub entry now"
+ sudo update-grub
+
+ # Return success status of the update-grub command
+ return "$?"
+
+else
+ echo "Failure writting to grub file"
+ exit 1
+fi
+

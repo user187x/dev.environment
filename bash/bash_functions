@@ -1,0 +1,466 @@
+#!/bin/bash
+
+if [[ -n "${__BASH_FUNCTIONS__:-}" ]]; then
+ return 0
+fi
+ 
+__BASH_FUNCTIONS__=1
+
+# Define global colors for consistency across functions
+R='\e[1;91m' # Red
+G='\e[1;92m' # Green
+Y='\e[1;93m' # Yellow
+B='\e[1;94m' # Blue
+M='\e[3;90m' # Muted/Grey
+NC='\e[0m'   # No Color
+
+############################################
+# UTILITY FUNCTIONS
+############################################
+
+clipboard() {
+ local G='\033[0;92m'
+ local R='\033[0;91m'
+ local Y='\033[1;93m'
+ local M='\033[0;90m'
+ local NC='\033[0m'
+
+ local file="$1"
+ local _input_source=""
+
+ # --- Input Validation ---
+ if [[ -n "$file" ]]; then
+  if [[ ! -f "$file" ]]; then
+   echo -e " ${R}(!)${NC} File not found: $file"
+   return 1
+  fi
+  _input_source="file"
+ elif [[ -p /dev/stdin ]]; then
+  _input_source="stdin"
+ else
+  echo -e " ${G}(i)${NC} Usage: \e[1;27mclipboard\e[0m ${Y}<file>${NC} or \e[1;27mcommand\e[0m | \e[1;27mclipboard\e[0m"
+  return 1
+ fi
+
+ # 1. macOS
+ if [[ "$(uname)" == "Darwin" ]] && command -v pbcopy >/dev/null; then
+  if [[ "$_input_source" == "file" ]]; then
+   pbcopy <"$file"
+  else
+   cat | pbcopy
+  fi
+
+ # 2. Wayland (Only if WAYLAND_DISPLAY is set)
+ elif [[ -n "$WAYLAND_DISPLAY" ]] && command -v wl-copy >/dev/null; then
+  if [[ "$_input_source" == "file" ]]; then
+   wl-copy <"$file"
+  else
+   cat | wl-copy
+  fi
+
+ # 3. WSL (Windows Subsystem for Linux)
+ elif grep -q "Microsoft" /proc/version 2>/dev/null && command -v clip.exe >/dev/null; then
+  if [[ "$_input_source" == "file" ]]; then
+   cat "$file" | clip.exe
+  else
+   cat | clip.exe
+  fi
+
+ # 4. X11 (xclip)
+ elif [[ -n "$DISPLAY" ]] && command -v xclip >/dev/null; then
+  if [[ "$_input_source" == "file" ]]; then
+   xclip -selection clipboard -i "$file"
+  else
+   cat | xclip -selection clipboard
+  fi
+
+ # 5. X11 (xsel fallback)
+ elif [[ -n "$DISPLAY" ]] && command -v xsel >/dev/null; then
+  if [[ "$_input_source" == "file" ]]; then
+   xsel --clipboard --input <"$file"
+  else
+   cat | xsel --clipboard --input
+  fi
+
+ else
+  echo -e " ${R}(!)${NC} Could not detect a valid clipboard utility or display session."
+  echo -e "       Debug: WAYLAND_DISPLAY='$WAYLAND_DISPLAY', DISPLAY='$DISPLAY'"
+  return 1
+ fi
+
+ # --- Success Message ---
+ if [[ "$_input_source" == "file" ]]; then
+  echo -e "${M} File ${G}$(basename "$file")${NC}${M} contents copied to system clipboard.${NC}"
+ else
+  echo -e "${G} Input copied to system clipboard.${NC}"
+ fi
+}
+
+export -f clipboard
+
+fmt() {
+ local script="$1"
+ if [[ -z "$script" ]]; then
+  echo "Usage : fmt <bash-script>"
+  return 1
+ fi
+
+ if [[ ! -f "$script" ]]; then
+  echo "File not found: $script"
+  return 1
+ fi
+
+ if command -v shfmt >/dev/null; then
+  shfmt -i 1 -w "$script"
+  if [[ "$?" -eq 0 ]]; then
+   echo -e " ${M}(i) Bash Script Formatted:${NC} ${G}$script${NC}"
+  else
+   echo -e " ${R}(!)${NC} Failure formatting script: ${G}$script${NC}"
+  fi
+ else
+  echo -e " ${R}(!)${NC} 'shfmt' is not installed."
+ fi
+}
+
+# Depth of terminal sessions
+terminal_depth() {
+
+ #pstree -p -A -s $$ | \
+ #head -n 1 | \
+ #sed "s/($$).*/($$)/; s/([0-9]*)//g; s/---/ ➤ /g; s/ ➤ -/ ➤ /g; s/tmux: server/tmux/"
+
+ # Get the raw tree with PIDs, truncated at the current shell ($$)
+ local tree=$(pstree -p -A -s $$ | head -n 1 | sed "s/($$).*/($$)/")
+
+ if [[ "$1" == "--pid" ]]; then
+  # Format WITH PIDs: Add space before (, switch arrows, clean artifacts
+  echo "$tree" | sed 's/---/ ➤ /g; s/(/ (/g; s/ ➤ -/ ➤ /g; s/tmux: server/tmux/'
+ else
+  # Format WITHOUT PIDs: Remove numbers, switch arrows, clean artifacts
+  echo "$tree" | sed 's/([0-9]*)//g; s/---/ ➤ /g; s/ ➤ -/ ➤ /g; s/tmux: server/tmux/'
+ fi
+
+}
+
+export -f terminal_depth
+
+fz() {
+
+ # Dependency check
+ if ! command -v fzf >/dev/null || ! command -v whiptail >/dev/null; then
+  echo "Dependencies [fzf] and [whiptail] are required. Installing now..."
+  sudo apt install fzf -y && sudo apt install whiptail -y
+
+  if ! command -v fzf >/dev/null || ! command -v whiptail >/dev/null; then
+   echo "Dependencies are missing. Terminating"
+   exit 1
+  fi
+ fi
+
+ local selected_item
+ selected_item="$(fzf "$@")"
+
+ if [[ -n "$selected_item" ]]; then
+  local extension="${selected_item##*.}"
+  local directory
+
+  # Handle if user selected a directory or a file
+  if [[ -d "$selected_item" ]]; then
+   directory="$selected_item"
+  else
+   directory=$(dirname "$selected_item")
+  fi
+
+  # Determine default tool based on extension
+  local tool_label="System Default"
+  if [[ "$extension" == "mp3" ]]; then
+   tool_label="Play Audio"
+  elif [[ -x /usr/bin/gedit ]]; then
+   tool_label="Gedit"
+  fi
+
+  # Whiptail Menu
+  local option
+  option=$(whiptail --title "Fuzzy Action: $(basename "$selected_item")" \
+   --menu "Choose an action:" 15 60 6 \
+   "1" "View File (Bat)" \
+   "2" "Edit (Vim)" \
+   "3" "$tool_label" \
+   "4" "Open Directory (GUI)" \
+   "5" "CD to Directory" \
+   "6" "Cancel" \
+   3>&1 1>&2 2>&3)
+
+  case "$option" in
+  "1")
+   bat "$selected_item"
+   ;;
+  "2")
+   # Use sudo if not writable
+   if [ -w "$selected_item" ]; then
+    vim "$selected_item"
+   else
+    sudo vim "$selected_item"
+   fi
+   ;;
+  "3")
+   if [[ "$extension" == "mp3" ]]; then
+    echo "Listening to: $selected_item"
+    mpv --no-video "$selected_item" >/dev/null 2>&1
+   elif [[ "$tool_label" == "Gedit" ]]; then
+    nohup gedit "$selected_item" >/dev/null 2>&1 &
+   else
+    xdg-open "$selected_item" >/dev/null 2>&1
+   fi
+   ;;
+  "4")
+   xdg-open "$directory" >/dev/null 2>&1
+   ;;
+  "5")
+   echo -e "${M}Changing directory to: ${G}$directory${NC}"
+   cd "$directory" || return
+   ls -F --color=auto
+   ;;
+  *)
+   return 0
+   ;;
+  esac
+ fi
+}
+
+qr-code() {
+ local text="$1"
+ if [[ -z "$text" ]]; then
+  read -r -p "Text to convert: " text
+ fi
+
+ if [[ -z "$text" ]]; then return; fi
+
+ local export_path
+ read -e -r -p "Save location (leave empty for terminal only): " export_path
+
+ if [[ -n "$export_path" ]]; then
+  local export_dir
+  local export_filename
+
+  if [[ -d "$export_path" ]]; then
+   export_dir="${export_path%/}"
+   export_filename="qr_code"
+  else
+   export_dir=$(dirname "$export_path")
+   export_filename=$(basename "$export_path")
+  fi
+
+  # Generate files
+  echo "Saving to ${export_dir}..."
+  qrencode -m 2 -s 10 -o "${export_dir}/${export_filename}.png" "$text"
+  echo -e "${G}Saved:${NC} ${export_dir}/${export_filename}.png"
+ fi
+
+ echo "Terminal Preview:"
+ qrencode -m 2 -s 1 -t UTF8 -l L "$text"
+ echo
+}
+export -f qr-code
+
+image-to-asci() {
+ if [[ -f "$1" ]]; then
+  jp2a -i --chars="XxxVO" "$1"
+ else
+  echo "File not found [$1]"
+ fi
+}
+export -f image-to-asci
+
+convert-image() {
+ if [[ -f "$1" ]] && [[ -n "$2" ]]; then
+  convert "$1" -quality 100 "$2"
+  echo -e "${G}Converted:${NC} $1 -> $2"
+ else
+  echo "Usage: convert-image <input> <output>"
+  return 1
+ fi
+}
+export -f convert-image
+
+function alert {
+ local last_exit_status=$?
+ local icon_name="terminal"
+ local msg
+
+ if [ "$last_exit_status" -ne 0 ]; then
+  icon_name="error"
+ fi
+
+ msg=$(history | tail -n1 | sed -e 's/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//')
+ notify-send --urgency=low -i "$icon_name" "Command Complete" "$msg"
+}
+
+############################################
+# SOUND FUNCTIONS
+############################################
+
+exit_sound() {
+ local sound_file="/opt/audio/Megamanteleport.wav"
+ if [[ -f "$sound_file" ]] && command -v mpv >/dev/null; then
+  nohup mpv --no-video "$sound_file" >/dev/null 2>&1 &
+  disown
+ fi
+}
+
+################################################
+# SYSTEM FUNCTIONS                             #
+################################################
+
+clean() {
+ sudo apt clean
+ sudo apt autoclean
+ sudo apt remove -y
+ sudo apt autoremove -y
+ echo -e "${G}Cleanup Complete${NC}\n"
+}
+export -f clean
+
+update() {
+ sudo apt-get update
+ sudo apt update && sudo apt upgrade -y
+ echo -e "${G}Update Complete!${NC}"
+ clean
+}
+export -f update
+
+# Overrides (Requires 'grc' installed)
+# This replaces the redundant 'gdiff' function
+if command -v grc >/dev/null; then
+ netstat() { grc sudo netstat "$@"; }
+ diff() { grc diff "$@"; }
+ ping() { grc ping "$@"; }
+ head() { grc head "$@"; }
+ tail() { grc tail "$@"; }
+ mount() { grc mount "$@"; }
+ ps() { grc sudo ps "$@"; }
+fi
+
+prettyJson() {
+ local input="$1"
+ if [[ -f "$input" ]]; then
+  cat "$input" | jq -C . | less -R
+ else
+  echo "$input" | jq '.'
+ fi
+}
+export -f prettyJson
+
+spin() {
+ local message="$1"
+ local delay=0.2
+ local spinner="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+ local i=0
+ while true; do
+  printf "\r%s \033[36m%s\033[0m" "$message" "${spinner:$((i++ % ${#spinner})):1}"
+  sleep "$delay"
+ done
+}
+export -f spin
+
+play() {
+ if [[ -f "$1" ]]; then
+  mpv --no-video "$1"
+ elif [[ -d "$1" ]]; then
+  local media_files=()
+  while IFS= read -r file; do
+   media_files+=("$file")
+  done < <(find "$1" -type f -iname "*.mp3")
+
+  if [[ "${#media_files[@]}" -ne 0 ]]; then
+   echo "Found ${#media_files[@]} MP3s"
+   mpv "${media_files[@]}"
+  else
+   echo "No MP3s found in directory."
+  fi
+ else
+  echo "Usage : play <filePath|dirPath>"
+ fi
+}
+export -f play
+
+# Mirror function
+mp3() { play "$@"; }
+export -f mp3
+
+search() {
+ if [[ -z "$1" ]]; then
+  echo "Usage: search <term>"
+  return 1
+ fi
+
+ local selected_line
+ selected_line=$(rg --color=always \
+  --line-number \
+  --no-heading "$1" |
+  fzf --ansi \
+   --delimiter=: \
+   --nth=1,3.. \
+   --preview 'bat --style=numbers --color=always {1} --highlight-line {2} || cat {1}')
+
+ local file_path
+ file_path=$(echo "$selected_line" | cut -d: -f1)
+
+ if [[ -n "$file_path" ]]; then
+  echo "Selected file : $file_path"
+  vim "$file_path"
+ fi
+}
+export -f search
+
+function list-fonts {
+
+ local filter
+ local enabled="false"
+
+ # List all avaialable filsters
+ local x=$(toilet --filter list)
+ local y=$(echo "$x" | awk '{print $1}')
+ local z=$(echo "$y" | xargs -I {} bash -c 'f="{}"; echo "${f%?}"')
+ local filters=$(echo "$z" | sed '1d')
+
+ # if user entered input
+ if [[ ! -z "$1" ]]; then
+  filter="$1"
+  for filter in "${filters[@]}"; do
+   if [[ "$filter" == "$input" ]]; then
+    enabled="true"
+    break
+   fi
+  done
+ fi
+
+ if [[ "$enabled" != "true" ]]; then
+  echo "$filters"
+  read -r -p "Choose available filter: " input
+  filter="$input"
+  enabled="true"
+ fi
+
+ counter=0
+ for f in /usr/share/figlet/*.[tf]lf; do
+  ((counter++))
+  font_name=$(basename "${f%.*}")
+
+  if [[ "$enabled" == "true" ]]; then
+   toilet -f $font_name --filter "$filter" "Example"
+  else
+   toilet -f $font_name --gay "Example"
+  fi
+
+  echo -e "\e[90mFont :\e[92m$font_name\e[0m"
+  modulo=$((counter % 5))
+  if [[ "$modulo" -eq 0 ]]; then
+   read -r -p "Press any button to continue (or X to exit) " input
+   if [[ "$input" =~ ^[xX]$ ]]; then
+    return 0
+   fi
+  fi
+ done
+}
+export -f list-fonts

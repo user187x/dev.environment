@@ -1,0 +1,157 @@
+#!/bin/bash
+
+# If not a human/interactively, don't do anything
+case $- in
+*i*) ;;
+*)
+ return
+ ;;
+esac
+
+# Bash history control
+HISTCONTROL=ignoreboth
+HISTSIZE=100000000
+
+# Don't create a less history file
+export LESSHISTFILE="$HOME/.config/.less_history"
+export HISTFILE="$HOME/.config/.bash_history"
+
+shopt -s histappend
+
+# Add directory to PATH
+if [ -d "$HOME/.local/bin" ]; then
+ export PATH="$HOME/.local/bin:$PATH"
+fi
+
+# Check the window size after each command
+shopt -s checkwinsize
+
+################################################
+#          Shell Configuruation                #
+################################################
+
+# make less more friendly for non-text input
+if [ -x /usr/bin/lesspipe ]; then
+ eval "$(SHELL=/bin/sh lesspipe)"
+fi
+
+############################################
+#           Bash Resource Files            #
+############################################
+
+source ~/.bash_aliases
+source ~/.bash_functions
+source ~/.bash_completions
+
+############################################
+#           TERMINAL FUNCTIONS             #
+############################################
+
+_RED="\[\e[38;5;196m\]"
+_GREEN="\[\e[38;5;84m\]"
+_YELLOW="\[\e[0;33m\]"
+_BLUE="\[\e[0;34m\]"
+_MAGENTA="\[\e[0;35m\]"
+_CYAN="\[\e[0;36m\]"
+_NC="\[\e[0m\]"
+_PALETTE=("$_RED" "$_YELLOW" "$_GREEN" "$_CYAN" "$_BLUE" "$_MAGENTA")
+
+update_prompt_string() {
+
+ local EXIT_CODE=$?
+ local idx=$(($(date +%-S) % ${#_PALETTE[@]}))
+
+ # Note: The random color logic is applied to the prompt symbol,
+ # but distinct Green/Red is used for success/fail.
+
+ if [[ "$EXIT_CODE" -eq 0 ]]; then
+  PS1="${_GREEN} ➤  ${_NC}"
+ else
+  PS1="${_RED} ➤💥  ${_NC}"
+ fi
+}
+
+# Bash terminal prompt session
+export PS1='\[\e[38;5;216m\] ➤  \[\e[0m\]'
+
+# Execute the dynamic prompt update (Function defined in bashrc_functions)
+export PROMPT_COMMAND=update_prompt_string
+
+################################################
+# BASH AUTO UPDATE                             #
+################################################
+
+function update-system {
+ sudo apt update &&
+  sudo apt full-upgrade -y &&
+  sudo apt autoremove -y &&
+  sudo apt autoclean
+}
+
+################################################
+# BASH AUTO COMPLETE                           #
+################################################
+
+# Kubectl auto-complete
+if command -v kubectl >/dev/null; then
+ source <(kubectl completion bash)
+ complete -o default -F __start_kubectl k
+fi
+
+# Load Bash tab completion
+if ! shopt -oq posix; then
+ if [ -f /usr/share/bash-completion/bash_completion ]; then
+  . /usr/share/bash-completion/bash_completion
+ elif [ -f /etc/bash_completion ]; then
+  . /etc/bash_completion
+ fi
+fi
+
+################################################
+# CONFIGURATION & HOOKS                        #
+################################################
+
+# Terminal Sound Fx
+function terminal_soundFx {
+
+ local action="$1"
+
+ # Check if argument count is 0
+ if [[ "$#" -eq 0 && -n "$PS1" ]]; then
+  echo -e "\e[90m(!) SoundFx: No action specified\e[0m"
+  return 1
+ fi
+
+ declare -A actions
+ actions["open"]="/opt/audio/info.mp3"
+ actions["close"]="/opt/audio/MegamanTeleport.wav"
+
+ # 3. Check if the action exists in the map
+ if [[ -z "${actions[$action]}" ]]; then
+  echo -e "\e[90m(!) SoundFx: Action Unknown '$action'\e[0m"
+  return 1
+ fi
+
+ local sound_file="${actions[$action]}"
+
+ # Check if file exists (AND check for mpv)
+ if [[ ! -f "$sound_file" ]]; then
+  return 1
+ fi
+
+ # Check for mpv command
+ if ! command -v mpv >/dev/null; then
+  return 1
+ fi
+
+ # Play Sound
+ nohup mpv "$sound_file" >/dev/null 2>&1 &
+ disown
+}
+
+# Play Open Sound
+terminal_soundFx open
+
+# Trap Close Sound
+trap 'terminal_soundFx close' EXIT
+alias mbp='ssh xxx@192.168.50.195'

@@ -1,0 +1,35 @@
+#!/bin/bash
+
+if [[ -n "${__BASH_COMPLETIONS__:-}" ]]; then
+ return 0
+fi
+
+__BASH_COMPLETIONS__=1
+
+# auto-complete for toilet command
+_toilet_completion() {
+ local cur prev filters
+ COMPREPLY=()
+ cur="${COMP_WORDS[COMP_CWORD]}"
+ prev="${COMP_WORDS[COMP_CWORD - 1]}"
+
+ # Logic for the --filter (or -F) flag
+ if [[ "$prev" == "-F" || "$prev" == "--filter" ]]; then
+  # Run 'toilet --filter list', extract the first word of each line (the filter name)
+  # and ignore any description text following colons or spaces.
+  filters=$(toilet --filter list 2>/dev/null | awk -F: '{print $1}' | awk '{print $1}')
+
+  # Generate the completion list based on what the user has currently typed ($cur)
+  COMPREPLY=($(compgen -W "${filters}" -- ${cur}))
+  return 0
+ fi
+
+ if [[ "$cur" =~ ^- ]]; then
+  local opts="-F --filter -f --font -E --export -w --width -h --help"
+  COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+  return 0
+ fi
+}
+
+# Register the function to handle completions for the 'toilet' command
+complete -F _toilet_completion toilet

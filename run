@@ -1,0 +1,196 @@
+#!/bin/bash
+
+# ==========================================
+# Setup & Configuration
+# ==========================================
+
+# strict mode: exit on error, undefined vars, or pipe failures
+set -euo pipefail
+
+# Global Constants
+readonly DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly BACKUP_DIR="$HOME/.dotfiles_backup/$(date +%Y%m%d_%H%M%S)"
+readonly FONT_DIR="$HOME/.local/share/fonts"
+readonly TMUX_CONFIG_DIR="$HOME/.config/tmux"
+
+# Colors for logging
+readonly C_RESET='\e[0m'
+readonly C_GREEN='\e[32m'
+readonly C_BLUE='\e[34m'
+readonly C_YELLOW='\e[33m'
+readonly C_RED='\e[31m'
+
+# ==========================================
+# Utility Functions
+# ==========================================
+
+log_info() { echo -e "${C_BLUE}[INFO]${C_RESET} $1"; }
+log_success() { echo -e "${C_GREEN}[OK]${C_RESET}   $1"; }
+log_warn() { echo -e "${C_YELLOW}[WARN]${C_RESET} $1"; }
+log_error() {
+ echo -e "${C_RED}[ERR]${C_RESET}  $1"
+ exit 1
+}
+
+# safely links source to dest, backing up existing files if necessary
+link_resource() {
+ local src="$1"
+ local dest="$2"
+
+ # Create destination parent directory if it doesn't exist
+ local dest_dir
+ dest_dir=$(dirname "$dest")
+ mkdir -p "$dest_dir"
+
+ # Remove existing file/symlink/directory
+ if [[ -e "$dest" || -L "$dest" ]]; then
+  rm -rf "$dest"
+ fi
+
+ ln -s "$src" "$dest"
+ log_success "Linked: $dest -> $src"
+}
+
+# ==========================================
+# Core Modules
+# ==========================================
+
+check_dependencies() {
+ log_info "Checking system dependencies..."
+
+ local deps=("tmux" "tar" "git" "vim" "curl")
+ local missing_deps=()
+
+ for cmd in "${deps[@]}"; do
+  if ! command -v "$cmd" &>/dev/null; then
+   missing_deps+=("$cmd")
+  fi
+ done
+
+ if [[ ${#missing_deps[@]} -gt 0 ]]; then
+  log_warn "Installing missing dependencies: ${missing_deps[*]}"
+  sudo apt update && sudo apt install -y "${missing_deps[@]}"
+ else
+  log_success "All dependencies satisfied."
+ fi
+}
+
+install_fonts() {
+ log_info "Installing fonts..."
+
+ # Ensure destination directory exists
+ mkdir -p "$FONT_DIR"
+
+ # -a : Archive mode (recursive, preserves permissions/timestamps)
+ # -n : No-clobber (do not overwrite an existing file; silently skip it)
+ cp -an "$DEV_HOME/fonts/." "$FONT_DIR/"
+
+ if command -v fc-cache &>/dev/null; then
+  fc-cache -f
+  log_success "Font cache updated."
+ else
+  log_warn "fc-cache not found, skipping font cache update."
+ fi
+}
+
+install_media() {
+ log_info "Installing media resources..."
+
+ local dest="/opt/audio"
+
+ # Sudo is required for /opt
+ if [[ ! -d "$dest" ]]; then
+  sudo mkdir -p "$dest"
+ fi
+
+ # Copy content and fix permissions
+ sudo cp -rfT "$DEV_HOME/audio" "$dest"
+ sudo chown -R "$USER:$USER" "$dest"
+ log_success "Audio resources installed to $dest"
+}
+
+setup_vim() {
+ log_info "Configuring Vim..."
+ link_resource "$DEV_HOME/vim" "$HOME/.vim"
+}
+
+setup_tmux() {
+ log_info "Configuring Tmux..."
+
+ # Cleanup legacy paths if they exist
+ local legacy_paths=("$HOME/.tmux" "$HOME/.tmux.conf")
+ for path in "${legacy_paths[@]}"; do
+  [[ -e "$path" || -L "$path" ]] && rm -rf "$path"
+ done
+
+ # Link the main configuration directory
+ link_resource "$DEV_HOME/tmux" "$TMUX_CONFIG_DIR"
+
+ # Create metadata file
+ echo "$TMUX_CONFIG_DIR" >"$TMUX_CONFIG_DIR/tmux.meta"
+
+ # Initialize TPM (Tmux Plugin Manager)
+ # The file tree shows tpm is vendored inside tmux/plugins/tpm
+ local tpm_install_script="$TMUX_CONFIG_DIR/plugins/tpm/bin/install_plugins"
+
+ if [[ -x "$tpm_install_script" ]]; then
+  log_info "Running Tmux Plugin Manager installer..."
+  # Running inside a subshell to avoid directory changing side-effects
+  ("$tpm_install_script" >/dev/null 2>&1) || log_warn "TPM installer returned non-zero exit code."
+ else
+  log_warn "TPM installer not found at $tpm_install_script"
+ fi
+}
+
+setup_bash() {
+ log_info "Configuring Bash..."
+
+ local dot_files=("bashrc" "bash_packages" "bash_aliases" "bash_functions" "bash_completions")
+
+ for file in "${dot_files[@]}"; do
+  link_resource "$DEV_HOME/bash/$file" "$HOME/.$file"
+ done
+}
+
+# ==========================================
+# Main Execution
+# ==========================================
+
+main() {
+ echo -e "${C_BLUE}=========================================="
+ echo -e "   Initializing Dev Environment"
+ echo -e "==========================================${C_RESET}"
+
+ # Ensure sudo permissions upfront to prevent timeout later
+ sudo -v
+
+ # Safety check for running Tmux
+ if [[ -n "${TMUX:-}" ]]; then
+  log_error "Please exit your current Tmux session before running this script."
+ fi
+
+ # 1. System Dependencies
+ check_dependencies
+
+ # 2. Resources (Fonts/Audio)
+ install_fonts
+ install_media
+
+ # 3. Application Configs
+ setup_bash
+ setup_vim
+ setup_tmux
+
+ # 4. Finalize
+ log_info "Reloading shell configuration..."
+ source "$HOME/.bashrc" || true
+
+ echo -e "\n${C_GREEN}=========================================="
+ echo -e "   Setup Complete! "
+ echo -e "==========================================${C_RESET}"
+ echo "1. Restart terminal (or exec bash)"
+ echo "2. Start Tmux, Prese <Ctrl + Space> + I to install plugins."
+}
+
+# Execute
+main "$@"

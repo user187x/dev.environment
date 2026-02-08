@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# image location
+avatar="$PWD../resrouces/images/avatar.png"
+
+echo "Setting account $USER avatar to image : $avatar"
+read -r -p "Proceed with acction? (y/n) : " response
+
+while true; do
+if [[ "$response" != "y" ]]; then
+ read -e -r -p "Enter desired image path: " avatar
+ if [[ -f "$avatar" ]]; then
+  echo "Setting avatar image: $avatar"
+  break;
+ fi
+else
+ echo "Terminating..."
+fi
+done
+
+account_svc_path="/var/lib/AccountsService/"
+image_name=$(basename "$avatar")
+target_path="$account_svc_path/icons/$image_name"
+
+# Copy image to the system avatars directory
+echo "Copying image to: $"
+sudo cp "$avatar" "$target_path"
+
+if [[ ! -f "$target_path" ]]; then
+ echo "Failure copying image to target destination. Terminating"
+ exit
+fi
+
+# Update the user configuration file
+echo "[User]
+Session=ubuntu
+Icon=$target_path
+SystemAccount=false" | sudo tee "$account_svc_path/users/$USER"
+
+echo
+echo "Account avatar update complete!"
+echo
