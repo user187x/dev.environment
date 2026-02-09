@@ -83,7 +83,7 @@ install_fonts() {
 
  # -a : Archive mode (recursive, preserves permissions/timestamps)
  # -n : No-clobber (do not overwrite an existing file; silently skip it)
- cp -an "$DEV_HOME/fonts/." "$FONT_DIR/"
+ cp -a --update=none "$DEV_HOME/fonts/." "$FONT_DIR/"
 
  if command -v fc-cache &>/dev/null; then
   fc-cache -f
@@ -157,16 +157,17 @@ setup_bash() {
 # ==========================================
 
 main() {
- echo -e "${C_BLUE}=========================================="
- echo -e "   Initializing Dev Environment"
- echo -e "==========================================${C_RESET}"
+
+ echo
+ echo -e "${C_YELLOW} Initializing Dev Environment${C_RESET}"
+ echo
 
  # Ensure sudo permissions upfront to prevent timeout later
  sudo -v
 
  # Safety check for running Tmux
  if [[ -n "${TMUX:-}" ]]; then
-  log_error "Please exit your current Tmux session before running this script."
+  log_error "Terminate Tmux before proceeding"
  fi
 
  # 1. System Dependencies
@@ -185,11 +186,14 @@ main() {
  log_info "Reloading shell configuration..."
  source "$HOME/.bashrc" || true
 
- echo -e "\n${C_GREEN}=========================================="
- echo -e "   Setup Complete! "
- echo -e "==========================================${C_RESET}"
- echo "1. Restart terminal (or exec bash)"
- echo "2. Start Tmux, Prese <Ctrl + Space> + I to install plugins."
+ echo
+ echo -e "${C_YELLOW} Setup Complete!${C_RESET}"
+ echo
+
+ echo " (1) Restart Terminal (or type: exec bash)"
+ echo " (2) Start Tmux, then prese <Ctrl + Space> + <I> to intialize the plugins."
+ echo
+
 }
 
 # Execute
