@@ -98,6 +98,14 @@ clipboard() {
 
 export -f clipboard
 
+# Clean up broken symlinks
+clean-broken-links {
+
+ find / -xtype l -delete.
+}
+
+export -f clean-broken-links
+
 fmt() {
  local script="$1"
  if [[ -z "$script" ]]; then
@@ -329,8 +337,17 @@ update() {
 }
 export -f update
 
-# Overrides (Requires 'grc' installed)
-# This replaces the redundant 'gdiff' function
+################################################
+# BASH AUTO UPDATE                             #
+################################################
+
+function update-system {
+  sudo apt update &&
+  sudo apt full-upgrade -y &&
+  sudo apt autoremove -y &&
+  sudo apt autoclean
+}
+
 if command -v grc >/dev/null; then
  netstat() { grc sudo netstat "$@"; }
  diff() { grc diff "$@"; }

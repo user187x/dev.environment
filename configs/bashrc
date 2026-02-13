@@ -78,17 +78,6 @@ export PS1='\[\e[38;5;216m\] ➤  \[\e[0m\]'
 export PROMPT_COMMAND=update_prompt_string
 
 ################################################
-# BASH AUTO UPDATE                             #
-################################################
-
-function update-system {
- sudo apt update &&
-  sudo apt full-upgrade -y &&
-  sudo apt autoremove -y &&
-  sudo apt autoclean
-}
-
-################################################
 # BASH AUTO COMPLETE                           #
 ################################################
 

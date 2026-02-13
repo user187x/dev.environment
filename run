@@ -9,6 +9,7 @@ set -euo pipefail
 
 # Global Constants
 readonly DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 readonly BACKUP_DIR="$HOME/.dotfiles_backup/$(date +%Y%m%d_%H%M%S)"
 readonly FONT_DIR="$HOME/.local/share/fonts"
 readonly TMUX_CONFIG_DIR="$HOME/.config/tmux"
@@ -152,9 +153,9 @@ setup_bash() {
  done
 }
 
-# ==========================================
-# Main Execution
-# ==========================================
+#==========================================
+#             Main Execution
+#==========================================
 
 main() {
 
@@ -170,19 +171,15 @@ main() {
   log_error "Terminate Tmux before proceeding"
  fi
 
- # 1. System Dependencies
  check_dependencies
 
- # 2. Resources (Fonts/Audio)
  install_fonts
  install_media
 
- # 3. Application Configs
  setup_bash
  setup_vim
  setup_tmux
 
- # 4. Finalize
  log_info "Reloading shell configuration..."
  source "$HOME/.bashrc" || true
 
