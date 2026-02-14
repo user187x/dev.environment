@@ -1,1 +1,5 @@
 package-backup/
+certs/
+*.crt
+*.key
+*.csr

@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# Define the config file path
+CONFIG_FILE="/etc/systemd/logind.conf"
+BACKUP_FILE="/etc/systemd/logind.conf.bak_$(date +%F_%T)"
+
+# Check if script is run as root
+if [ "$EUID" -ne 0 ]; then
+ echo "Please run as root (use sudo)."
+ exit 1
+fi
+
+echo "--- Ubuntu 24.04 Lid Close Configuration ---"
+
+# 1. Create a backup of the original file
+if [ -f "$CONFIG_FILE" ]; then
+ cp "$CONFIG_FILE" "$BACKUP_FILE"
+ echo "Backup created at: $BACKUP_FILE"
+else
+ echo "Error: $CONFIG_FILE not found!"
+ exit 1
+fi
+
+# 2. Configure 'HandleLidSwitch' to 'poweroff'
+# This acts as the default setting (applied when on Battery)
+# We use sed to find the line (commented or not) and replace it.
+sed -i 's/^#\?HandleLidSwitch=.*/HandleLidSwitch=poweroff/' "$CONFIG_FILE"
+echo "Set: HandleLidSwitch=poweroff (Shutdown on Battery)"
+
+# 3. Configure 'HandleLidSwitchExternalPower' to 'lock'
+# This overrides the default when the laptop is plugged in
+sed -i 's/^#\?HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=lock/' "$CONFIG_FILE"
+echo "Set: HandleLidSwitchExternalPower=lock (Lock on AC Power)"
+
+# 4. Restart the service to apply changes
+echo "Restarting systemd-logind service..."
+systemctl restart systemd-logind
+
+echo "----------------------------------------------"
+echo "Configuration complete!"
+echo "Note: If the changes do not take effect immediately, please reboot your system."
