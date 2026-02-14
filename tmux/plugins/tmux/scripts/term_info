@@ -10,20 +10,22 @@ CURRENT_PATH=$2
 VAL_COLOR="#[fg=#f8f8f2]"
 RESET_COLOR="#[fg=default]"
 FILE_COLOR="#[fg=#ff79c6]"
+COLOR_GRAY="#[fg=#44475a]"
+COLOR_DGRAY="#[fg=#282a36]" 
 
 # Validation
 if [ -z "$CURRENT_PID" ]; then exit 0; fi
 
 # Recursive Child Finder ---
 find_deepest_child() {
-  local parent=$1
-  local child=$(pgrep -P "$parent" -n)
+ local parent=$1
+ local child=$(pgrep -P "$parent" -n)
 
-  if [ -z "$child" ]; then
-    echo "$parent"
-  else
-    find_deepest_child "$child"
-  fi
+ if [ -z "$child" ]; then
+  echo "$parent"
+ else
+  find_deepest_child "$child"
+ fi
 }
 
 # ----------------------------------------
@@ -38,20 +40,20 @@ LEAF_USER=$(ps -o user= -p "$LEAF_PID" | awk '{print $1}')
 TREE_OUTPUT=$(pstree -p -A -s "$LEAF_PID" 2>/dev/null | head -n 1)
 
 if [ -z "$TREE_OUTPUT" ]; then
-  LEAF_PID=$CURRENT_PID
-  LEAF_USER=$(ps -o user= -p "$LEAF_PID" | awk '{print $1}')
-  TREE_OUTPUT=$(pstree -p -A -s "$LEAF_PID" | head -n 1)
+ LEAF_PID=$CURRENT_PID
+ LEAF_USER=$(ps -o user= -p "$LEAF_PID" | awk '{print $1}')
+ TREE_OUTPUT=$(pstree -p -A -s "$LEAF_PID" | head -n 1)
 fi
 
 # 4. Clean up the tree visual
 CLEAN_TREE=$(echo "$TREE_OUTPUT" |
-  sed "s/($LEAF_PID).*/($LEAF_PID)/; s/([0-9]*)//g; s/---/ ➤ /g; s/ ➤ -/ ➤ /g; s/^systemd ➤ systemd ➤ //; s/tmux: server/tmux/")
+ sed "s/($LEAF_PID).*/($LEAF_PID)/; s/([0-9]*)//g; s/---/ ➤ /g; s/ ➤ -/ ➤ /g; s/^systemd ➤ systemd ➤ //; s/tmux: server/tmux/")
 
 # 4b. Color the LEAF node (The last item in the tree)
 if [[ "$CLEAN_TREE" == *" ➤ "* ]]; then
-  CLEAN_TREE=$(echo "$CLEAN_TREE" | sed "s/\(.*\)\( ➤ \)\(.*\)/\1\2${FILE_COLOR}\3/")
+ CLEAN_TREE=$(echo "$CLEAN_TREE" | sed "s/\(.*\)\( ➤ \)\(.*\)/\1\2${FILE_COLOR}\3/")
 else
-  CLEAN_TREE="${FILE_COLOR}${CLEAN_TREE}"
+ CLEAN_TREE="${FILE_COLOR}${CLEAN_TREE}"
 fi
 
 # ----------------------------------------
@@ -63,14 +65,14 @@ CMD_ARGS=$(ps -o args= -p "$LEAF_PID" 2>/dev/null)
 FILE_DISPLAY=""
 
 if [[ "$CMD_NAME" =~ (vi|vim|nvim|nano|emacs|micro|less|more|bat|cat|man) ]]; then
-  RAW_FILE=$(echo "$CMD_ARGS" | awk '{print $NF}')
-  if [[ "$RAW_FILE" != "$CMD_NAME" ]]; then
-    BASE_FILE=$(basename "$RAW_FILE")
-    FILE_DISPLAY=" File [${FILE_COLOR}${BASE_FILE}${RESET_COLOR}]"
-  fi
+ RAW_FILE=$(echo "$CMD_ARGS" | awk '{print $NF}')
+ if [[ "$RAW_FILE" != "$CMD_NAME" ]]; then
+  BASE_FILE=$(basename "$RAW_FILE")
+  FILE_DISPLAY=" File [${FILE_COLOR}${BASE_FILE}${RESET_COLOR}]"
+ fi
 elif [[ "$CMD_NAME" == "ssh" ]]; then
-  SSH_HOST=$(echo "$CMD_ARGS" | awk '{print $NF}')
-  FILE_DISPLAY=" SSH [${FILE_COLOR}${SSH_HOST}${RESET_COLOR}]"
+ SSH_HOST=$(echo "$CMD_ARGS" | awk '{print $NF}')
+ FILE_DISPLAY=" SSH [${FILE_COLOR}${SSH_HOST}${RESET_COLOR}]"
 fi
 
 # ----------------------------------------
@@ -80,11 +82,17 @@ fi
 # Logic: Regex matches the characters after the very last slash (or the whole string if no slash)
 # and wraps them in FILE_COLOR.
 if [ "$CURRENT_PATH" == "/" ]; then
-    COLORED_PATH="${FILE_COLOR}/${RESET_COLOR}"
+ COLORED_PATH="${FILE_COLOR}/${RESET_COLOR}"
 else
-    COLORED_PATH=$(echo "$CURRENT_PATH" | sed "s|\([^/]*\)$|${FILE_COLOR}\1${RESET_COLOR}|")
+ COLORED_PATH=$(echo "$CURRENT_PATH" | sed "s|\([^/]*\)$|${FILE_COLOR}\1${RESET_COLOR}|")
 fi
 
-# ----------------------------------------
+kubectx=""
+ctx=$(timeout 3 kubectl config current-context)
+if [[ ! -z "$ctx" ]]; then
+ kubectx="Cluster [${VAL_COLOR}$ctx${RESET_COLOR}]"
+else
+ kubectx=""
+fi
 
-echo "User [${VAL_COLOR}${LEAF_USER}${RESET_COLOR}] Path [${VAL_COLOR}${COLORED_PATH}${RESET_COLOR}]${FILE_DISPLAY} Terminal [${VAL_COLOR}${CLEAN_TREE}${RESET_COLOR}]"
+echo "User [${VAL_COLOR}${LEAF_USER}${RESET_COLOR}] Path [${VAL_COLOR}${COLORED_PATH}${RESET_COLOR}]${FILE_DISPLAY} ${kubectx}"
