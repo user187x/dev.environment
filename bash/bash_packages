@@ -167,6 +167,7 @@ packages=(
  "ranger"
  "mc"
  "cmatrix"
+ "sysvbanner"
 )
 
 failed=()
