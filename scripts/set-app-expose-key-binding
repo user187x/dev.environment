@@ -1,0 +1,24 @@
+#!/bin/bash
+
+KEY_PATH="/org/gnome/shell/keybindings/toggle-application-view"
+TARGET_VAL="['<Shift>Super_L', '<Super>Shift_L', '<Super>Shift_R']"
+
+# Read current value (returns nothing if default/unset in some cases, or the custom string)
+CURRENT_VAL=$(dconf read "$KEY_PATH")
+
+# Check if current settings match our target
+if [[ "$CURRENT_VAL" == "$TARGET_VAL" ]]; then
+ echo "The Shift+Super shortcut is ALREADY set."
+ read -p "Would you like to RESET it to the system default? (y/n): " choice
+ if [[ "$choice" =~ ^[Yy]$ ]]; then
+  dconf reset "$KEY_PATH"
+  echo "✅ Shortcut reset to default."
+ else
+  echo "❌ No changes made."
+ fi
+else
+ echo "The Shift+Super shortcut is NOT currently active."
+ echo "Setting it now..."
+ dconf write "$KEY_PATH" "$TARGET_VAL"
+ echo "✅ Shortcut applied! Try pressing Shift+Super or Super+Shift now."
+fi
