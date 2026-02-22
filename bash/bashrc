@@ -8,6 +8,10 @@ case $- in
  ;;
 esac
 
+# Set VIM as editor
+export EDITOR=vim
+export VISUAL=vim
+
 # Bash history control
 HISTCONTROL=ignoreboth
 HISTSIZE=100000000
