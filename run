@@ -145,10 +145,11 @@ setup_tmux() {
 setup_bash() {
  log_info "Configuring Bash..."
 
+ local dot_files_dir="$DEV_HOME/dot-files"
  local dot_files=("bashrc" "bash_packages" "bash_aliases" "bash_functions" "bash_completions")
 
  for file in "${dot_files[@]}"; do
-  link_resource "$DEV_HOME/bash/$file" "$HOME/.$file"
+  link_resource "$dot_files_dir/$file" "$HOME/.$file"
  done
 }
 
