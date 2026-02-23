@@ -1,0 +1,48 @@
+#!/bin/bash
+# Exit immediately if a command exits with a non-zero status.
+set -e
+
+echo "==================================================="
+echo " 🌐 Local DNS / Hosts File Updater"
+echo "==================================================="
+
+# 1. Gather inputs
+read -p "Enter the domain name to route locally (e.g., acme.anvils.com): " DOMAIN
+if [ -z "$DOMAIN" ]; then
+    echo "Error: Domain name cannot be empty."
+    exit 1
+fi
+
+read -p "Enter the target IP address (Press Enter for default: 127.0.0.1): " TARGET_IP
+TARGET_IP=${TARGET_IP:-127.0.0.1}
+
+# Define a marker comment to easily identify entries added by this script
+MARKER="# Added by Local PKI Toolkit"
+HOSTS_ENTRY="${TARGET_IP} ${DOMAIN} ${MARKER}"
+HOSTS_FILE="/etc/hosts"
+
+echo -e "\nChecking ${HOSTS_FILE} for existing entries..."
+
+# 2. Check if the domain is already mapped
+if grep -q "[[:space:]]${DOMAIN}\b" "$HOSTS_FILE"; then
+    EXISTING_IP=$(awk -v dom="$DOMAIN" '$2 == dom {print $1; exit}' "$HOSTS_FILE")
+    if [ "$EXISTING_IP" == "$TARGET_IP" ]; then
+        echo "✅ Domain '${DOMAIN}' is already mapped to ${TARGET_IP}. No changes needed."
+    else
+        echo "⚠️  Domain '${DOMAIN}' is currently mapped to ${EXISTING_IP}."
+        echo "To update it, please manually edit ${HOSTS_FILE} or remove the old entry first."
+    fi
+    exit 0
+fi
+
+# 3. Add the new entry
+echo -e "\nAdding '${DOMAIN}' -> '${TARGET_IP}' to ${HOSTS_FILE}..."
+echo "You may be prompted for your administrator password to modify the hosts file."
+
+# Use sudo tee to safely append to the file
+echo "$HOSTS_ENTRY" | sudo tee -a "$HOSTS_FILE" > /dev/null
+
+echo -e "\n==================================================="
+echo " ✅ Hosts file updated successfully!"
+echo " You can now route traffic to: https://${DOMAIN}"
+echo "==================================================="
