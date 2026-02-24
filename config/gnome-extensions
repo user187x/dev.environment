@@ -1,0 +1,112 @@
+#!/bin/bash
+
+# ==========================================
+# Functions
+# ==========================================
+
+backup_extensions() {
+ # Define backup directory name with timestamp
+ BACKUP_DIR="gnome_extensions_backup_$(date +%Y%m%d_%H%M%S)"
+ TAR_FILE="${BACKUP_DIR}.tar.gz"
+
+ echo -e "\nStarting GNOME Extensions backup..."
+
+ # 1. Create a temporary staging directory
+ mkdir -p "$BACKUP_DIR"
+
+ # 2. Save the list of user-installed extensions
+ echo "-> Saving extension UUIDs..."
+ if command -v gnome-extensions &>/dev/null; then
+  gnome-extensions list --user >"$BACKUP_DIR/extension_list.txt"
+ else
+  echo "Warning: 'gnome-extensions' command not found. Skipping UUID list."
+ fi
+
+ # 3. Export all extension settings from dconf
+ echo "-> Exporting extension settings..."
+ if command -v dconf &>/dev/null; then
+  dconf dump /org/gnome/shell/extensions/ >"$BACKUP_DIR/extension_settings.ini"
+ else
+  echo "Warning: 'dconf' command not found. Settings will not be backed up."
+ fi
+
+ # 4. Copy the actual extension files
+ echo "-> Copying extension files..."
+ EXT_DIR="$HOME/.local/share/gnome-shell/extensions"
+ if [ -d "$EXT_DIR" ]; then
+  cp -r "$EXT_DIR" "$BACKUP_DIR/files"
+ else
+  echo "Warning: No user extensions found in $EXT_DIR."
+ fi
+
+ # 5. Compress into a single archive and clean up
+ echo "-> Creating archive $TAR_FILE..."
+ tar -czf "$TAR_FILE" "$BACKUP_DIR"
+ rm -rf "$BACKUP_DIR"
+
+ echo "✅ Backup complete! Your extensions and settings are saved in: $TAR_FILE"
+}
+
+restore_extensions() {
+ echo -e "\nAvailable backup archives in current directory:"
+ ls -1 *.tar.gz 2>/dev/null || echo "No .tar.gz files found in the current directory."
+
+ echo ""
+ read -p "Enter the filename of the backup archive to restore (e.g., backup.tar.gz): " BACKUP_ARCHIVE
+
+ # Validate that the file actually exists before proceeding
+ if [ ! -f "$BACKUP_ARCHIVE" ]; then
+  echo "❌ Error: File '$BACKUP_ARCHIVE' not found! Exiting."
+  exit 1
+ fi
+
+ BACKUP_DIR="${BACKUP_ARCHIVE%.tar.gz}"
+
+ echo -e "\nStarting GNOME Extensions restore..."
+
+ # 1. Extract the archive
+ echo "-> Extracting archive..."
+ tar -xzf "$BACKUP_ARCHIVE"
+
+ # 2. Restore extension files
+ echo "-> Restoring extension files..."
+ EXT_DIR="$HOME/.local/share/gnome-shell/extensions"
+ mkdir -p "$EXT_DIR"
+ if [ -d "$BACKUP_DIR/files" ]; then
+  cp -r "$BACKUP_DIR/files/"* "$EXT_DIR/" 2>/dev/null || echo "No files to restore."
+ fi
+
+ # 3. Restore settings to dconf
+ echo "-> Restoring extension settings..."
+ if [ -f "$BACKUP_DIR/extension_settings.ini" ]; then
+  dconf load /org/gnome/shell/extensions/ <"$BACKUP_DIR/extension_settings.ini"
+ fi
+
+ # 4. Clean up
+ rm -rf "$BACKUP_DIR"
+
+ echo "✅ Restore complete!"
+ echo "⚠️ IMPORTANT: Log out and log back in (or restart GNOME Shell) for the extensions to appear in Extension Manager."
+}
+
+# ==========================================
+# Main Prompt
+# ==========================================
+
+echo "GNOME Extensions Backup & Restore Utility"
+echo "-----------------------------------------"
+read -p "Would you like to (B)ackup or (R)estore? [B/R]: " choice
+
+# Convert input to uppercase for flexible matching
+case "${choice^^}" in
+B)
+ backup_extensions
+ ;;
+R)
+ restore_extensions
+ ;;
+*)
+ echo "Invalid choice. Please run the script again and select 'B' or 'R'."
+ exit 1
+ ;;
+esac
