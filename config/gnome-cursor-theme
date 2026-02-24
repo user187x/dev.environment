@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Exit immediately if a command exits with a non-zero status
+set -e
+
+THEME_NAME="Borealis-cursors"
+TAR_URL="https://github.com/alvatip/Borealis-cursors/releases/download/2.0/Borealis-cursors.tar.gz"
+DEST_DIR="$HOME/.icons"
+
+echo "==> Creating icons directory at $DEST_DIR..."
+mkdir -p "$DEST_DIR"
+
+echo "==> Downloading $THEME_NAME tarball..."
+TMP_FILE=$(mktemp)
+wget -qO "$TMP_FILE" "$TAR_URL"
+
+echo "==> Extracting $THEME_NAME..."
+tar -xzf "$TMP_FILE" -C "$DEST_DIR"
+
+echo "==> Setting $THEME_NAME as the active cursor theme..."
+gsettings set org.gnome.desktop.interface cursor-theme "$THEME_NAME"
+
+echo "==> Cleaning up temporary files..."
+rm "$TMP_FILE"
+
+echo "==> Success! $THEME_NAME has been installed and applied."
+echo "Note: You might need to log out and log back in for the new cursors to apply completely across all running applications."
