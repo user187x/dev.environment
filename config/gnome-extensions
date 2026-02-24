@@ -6,7 +6,7 @@
 
 backup_extensions() {
  # Define backup directory name with timestamp
- BACKUP_DIR="gnome_extensions_backup_$(date +%Y%m%d_%H%M%S)"
+ BACKUP_DIR="gnome-extensions-backup"
  TAR_FILE="${BACKUP_DIR}.tar.gz"
 
  echo -e "\nStarting GNOME Extensions backup..."
@@ -52,7 +52,7 @@ restore_extensions() {
  ls -1 *.tar.gz 2>/dev/null || echo "No .tar.gz files found in the current directory."
 
  echo ""
- read -p "Enter the filename of the backup archive to restore (e.g., backup.tar.gz): " BACKUP_ARCHIVE
+ read -e -r -p "Enter the filename to restore: " BACKUP_ARCHIVE
 
  # Validate that the file actually exists before proceeding
  if [ ! -f "$BACKUP_ARCHIVE" ]; then
