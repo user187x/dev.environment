@@ -1,0 +1,12 @@
+#!/bin/bash
+
+read -e -r -p "Backup/Load ? (B/L) : " response
+if [[ "$resposne" == "B" || "$response" == "b" ]]; then
+ echo -e "\e[90m(i) Backing up current Gnome Desktop setting...\e[0m"
+ dconf dump / > gnome-laf.ini
+elif [[ "$resposne" == "B" || "$response" == "b" ]]; then
+ echo -e "\e[90m(i) Backing up current Gnome Desktop setting...\e[0m"
+ dconf load < gnome-laf.ini
+else
+ echo -e "\e[90m(i) Unknown response. Aborting...\e[0m"
+fi
