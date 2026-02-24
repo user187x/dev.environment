@@ -1,27 +1,30 @@
 #!/bin/bash
-
-# Exit immediately if a command exits with a non-zero status
 set -e
 
-THEME_NAME="Borealis-cursors"
-TAR_URL="https://github.com/alvatip/Borealis-cursors/releases/download/2.0/Borealis-cursors.tar.gz"
-DEST_DIR="$HOME/.icons"
+echo "==> Checking for git..."
+if ! command -v git &>/dev/null; then
+ echo "Git not found. Installing git..."
+ sudo apt-get update
+ sudo apt-get install -y git
+fi
 
-echo "==> Creating icons directory at $DEST_DIR..."
-mkdir -p "$DEST_DIR"
+echo "==> Creating a temporary directory..."
+TMP_DIR=$(mktemp -d)
+cd "$TMP_DIR"
 
-echo "==> Downloading $THEME_NAME tarball..."
-TMP_FILE=$(mktemp)
-wget -qO "$TMP_FILE" "$TAR_URL"
+echo "==> Cloning the Borealis-cursors repository..."
+git clone https://github.com/alvatip/Borealis-cursors.git
 
-echo "==> Extracting $THEME_NAME..."
-tar -xzf "$TMP_FILE" -C "$DEST_DIR"
+echo "==> Running the official system-wide installer..."
+cd Borealis-cursors
+# Running the developer's script with sudo for system-wide access
+sudo ./install.sh
 
-echo "==> Setting $THEME_NAME as the active cursor theme..."
-gsettings set org.gnome.desktop.interface cursor-theme "$THEME_NAME"
+echo "==> Setting Borealis-cursors as your active theme..."
+gsettings set org.gnome.desktop.interface cursor-theme "Borealis-cursors"
 
 echo "==> Cleaning up temporary files..."
-rm "$TMP_FILE"
+cd ~
+rm -rf "$TMP_DIR"
 
-echo "==> Success! $THEME_NAME has been installed and applied."
-echo "Note: You might need to log out and log back in for the new cursors to apply completely across all running applications."
+echo "==> Success! The theme is installed system-wide."
