@@ -1,0 +1,96 @@
+#!/bin/bash
+
+BACKUP_DIR="ubuntu-software-clone"
+TAR_NAME="ubuntu-software-clone.tar.gz"
+
+echo "=========================================="
+echo " System Software Cloner (APT, Snap, Flatpak)"
+echo "=========================================="
+
+# 1. Create a fresh directory for our lists
+rm -rf "$BACKUP_DIR"
+mkdir -p "$BACKUP_DIR"
+
+echo "[1/4] Exporting APT packages (Manual installs + PPAs)..."
+# Back up custom repositories so the new system knows where to download them
+mkdir -p "$BACKUP_DIR/apt-repos"
+cp -R /etc/apt/sources.list.d/* "$BACKUP_DIR/apt-repos/" 2>/dev/null || true
+# Get a list of explicitly installed APT packages (ignores default dependencies)
+apt-mark showmanual >"$BACKUP_DIR/apt_packages.txt"
+
+echo "[2/4] Exporting Snap packages..."
+if command -v snap >/dev/null 2>&1; then
+ # Print the snap list, skip the first header line, and grab the first column (package name)
+ snap list | awk 'NR>1 {print $1}' >"$BACKUP_DIR/snap_packages.txt"
+else
+ echo "Snap not installed, skipping..."
+ touch "$BACKUP_DIR/snap_packages.txt"
+fi
+
+echo "[3/4] Exporting Flatpak packages..."
+if command -v flatpak >/dev/null 2>&1; then
+ # Grab just the application IDs
+ flatpak list --app --columns=application >"$BACKUP_DIR/flatpak_packages.txt"
+else
+ echo "Flatpak not installed, skipping..."
+ touch "$BACKUP_DIR/flatpak_packages.txt"
+fi
+
+echo "[4/4] Generating the automatic Restore Script..."
+
+# Create the restore script that will be run on the target machine
+cat <<'EOF' >"$BACKUP_DIR/restore.sh"
+#!/bin/bash
+echo "=========================================="
+echo " System Software Restorer"
+echo "=========================================="
+
+# Ensure script is run with sudo for installations
+if [ "$EUID" -ne 0 ]; then
+  echo "Please run the restore script with sudo: sudo ./restore.sh"
+  exit 1
+fi
+
+echo "[1/4] Restoring APT repositories..."
+cp -R apt-repos/* /etc/apt/sources.list.d/ 2>/dev/null || true
+apt-get update
+
+echo "[2/4] Restoring APT packages..."
+if [ -s apt_packages.txt ]; then
+    xargs -a apt_packages.txt apt-get install -y
+fi
+
+echo "[3/4] Restoring Snap packages..."
+if [ -s snap_packages.txt ]; then
+    while read -r package; do
+        # Note: Some snaps require the --classic flag. The script attempts standard install first.
+        snap install "$package" || snap install "$package" --classic
+    done < snap_packages.txt
+fi
+
+echo "[4/4] Restoring Flatpak packages..."
+if command -v flatpak >/dev/null 2>&1; then
+    if [ -s flatpak_packages.txt ]; then
+        flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+        xargs -a flatpak_packages.txt -I {} flatpak install -y flathub {}
+    fi
+else
+    echo "Flatpak is not installed on this system. Skipping Flatpak restore."
+fi
+
+echo "----------------------------------------"
+echo "Restore complete! Your software has been duplicated."
+EOF
+
+# Make the restore script executable
+chmod +x "$BACKUP_DIR/restore.sh"
+
+echo -e "\n[Wrapping Up] Compressing into $TAR_NAME..."
+tar -czvf "$TAR_NAME" "$BACKUP_DIR" >/dev/null 2>&1
+
+# Clean up the uncompressed folder
+rm -rf "$BACKUP_DIR"
+
+echo "----------------------------------------"
+echo "Success! Transfer '$TAR_NAME' to your new computer."
+echo "To restore, extract it and run: sudo ./restore.sh"
