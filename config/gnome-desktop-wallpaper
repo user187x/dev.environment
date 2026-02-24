@@ -1,3 +1,12 @@
 #!/bin/bash
 
-gsettings set org.gnome.desktop.background picture 'file:///../media/images/wallpapers/3840x2160.svg'
+WALLPAPER_PATH=$(realpath "../media/images/wallpapers/3840x2160.svg")
+COLOR_MODE=$(gsettings get org.gnome.desktop.interface color-scheme)
+
+if [[ "$COLOR_MODE" == "'prefer-dark'" ]]; then
+ echo "Setting Dark Wallpaper..."
+ gsettings set org.gnome.desktop.background picture-uri-dark "$WALLPAPER_PATH"
+else
+ echo "Setting Light Wallpaper..."
+ gsettings set org.gnome.desktop.background picture-uri "$WALLPAPER_PATH"
+fi
