@@ -1,0 +1,31 @@
+#!/usr/bin/expect -f
+
+# Set the timeout in seconds (prevents the script from hanging forever if something goes wrong)
+set timeout 10
+
+# Spawn the ssh-keygen process
+spawn ssh-keygen -t rsa -b 4096 -C "xxx@xxx.com"
+
+# 1. Look for the file location prompt and press Enter (\r) to accept the default
+expect "Enter file in which to save the key"
+send "\r"
+
+# 2. Handle both the passphrase prompt OR a potential "Overwrite" prompt
+expect {
+    "Overwrite (y/n)?" {
+        # If the key already exists, say yes to overwrite, then loop back to expect the passphrase
+        send "y\r"
+        exp_continue
+    }
+    "Enter passphrase (empty for no passphrase):" {
+        # Press Enter for no passphrase
+        send "\r"
+    }
+}
+
+# 3. Confirm the empty passphrase
+expect "Enter same passphrase again:"
+send "\r"
+
+# Wait for the command to finish executing completely
+expect eof
