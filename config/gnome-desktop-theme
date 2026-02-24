@@ -1,0 +1,6 @@
+#!/bin/bash
+
+theme_dir="../themes/desktop/orchis/"
+"$theme_dir"/install.sh -t grey -c dark -s compact --round 15px --libadwaita
+
+echo -e "\e[90m(i) theme installed...\e[0m"
