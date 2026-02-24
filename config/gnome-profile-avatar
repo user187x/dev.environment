@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# Define the absolute path to the avatar image
+AVATAR_FILE="$HOME/dev.environment/profile/skull-black.png"
+
+echo "Setting profile picture for user: $USER..."
+
+# 1. Check if the file actually exists
+if [ ! -f "$AVATAR_FILE" ]; then
+ echo "❌ Error: Avatar file not found at $AVATAR_FILE"
+ echo "Please ensure the file exists and try again."
+ exit 1
+fi
+
+# 2. Update AccountsService via dbus (Standard for GNOME/Freedesktop)
+if command -v dbus-send &>/dev/null; then
+ echo "-> Updating AccountsService..."
+ # AccountsService requires an absolute path, which $AVATAR_FILE provides
+ dbus-send --system --print-reply \
+  --dest=org.freedesktop.Accounts \
+  /org/freedesktop/Accounts/User$(id -u) \
+  org.freedesktop.Accounts.User.SetIconFile \
+  string:"$AVATAR_FILE" &>/dev/null
+
+ if [ $? -eq 0 ]; then
+  echo "✅ AccountsService updated successfully."
+ else
+  echo "⚠️ Failed to update via dbus. (Your system might not use AccountsService)."
+ fi
+else
+ echo "⚠️ 'dbus-send' command not found. Skipping AccountsService update."
+fi
+
+# 3. Create ~/.face and ~/.face.icon symlinks (Standard fallback)
+echo "-> Creating ~/.face symlinks as a fallback for login managers..."
+ln -sf "$AVATAR_FILE" "$HOME/.face"
+ln -sf "$AVATAR_FILE" "$HOME/.face.icon"
+
+echo "✅ Profile picture setup complete!"
+echo "⚠️ Note: You may need to log out and log back in (or lock your screen) to see the changes everywhere."
