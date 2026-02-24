@@ -172,6 +172,8 @@ packages=(
  "cmatrix"
  "sysvbanner"
  "xclip"
+ "htop"
+ "kubecolor"
 )
 
 failed=()
