@@ -116,7 +116,7 @@ if ! shopt -oq posix; then
 fi
 
 # Autocomplete for kubenerentes
-source < (k completion bash)
+source <(kubectl completion bash)
 
 ################################################
 # CONFIGURATION & HOOKS                        #
