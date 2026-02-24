@@ -1,0 +1,9 @@
+#!/bin/bash
+
+file="/usr/share/sounds/gnome/default/alerts/hum.ogg"
+gsettings set org.gnome.desktop.sound theme-name 'hum'
+
+gsettings set org.gnome.desktop.sound event-sounds true
+gsettings set org.gnome.desktop.sound.default-theme 'hum'
+
+canberra-gtk-play -i dialog-warning
