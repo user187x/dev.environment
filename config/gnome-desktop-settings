@@ -7,6 +7,7 @@ if [[ "$resposne" == "B" || "$response" == "b" ]]; then
 elif [[ "$resposne" == "L" || "$response" == "l" ]]; then
  echo -e "\e[90m(i) Backing up current Gnome Desktop setting...\e[0m"
  dconf load -f / < gnome-laf.ini
+ killall -SIGUSR1 gnome-shell
 else
  echo -e "\e[90m(i) Unknown response. Aborting...\e[0m"
 fi
