@@ -1,0 +1,140 @@
+#!/bin/bash
+
+# 1. Check for root privileges
+if [ "$EUID" -ne 0 ]; then
+  echo "Error: This script must be run as root to remove system-wide packages and configs."
+  echo "Please run again using: sudo ./remove_libreoffice.sh"
+  exit 1
+fi
+
+echo "Starting complete LibreOffice removal..."
+echo "----------------------------------------"
+
+# 2. Purge all LibreOffice packages and related components
+echo "[1/4] Purging LibreOffice packages via APT..."
+apt-get remove --purge -y libreoffice*
+apt-get remove --purge -y uno-libs-private ure
+
+# 3. Clean up orphaned dependencies
+echo "[2/4] Cleaning up unused dependencies and APT cache..."
+apt-get autoremove --purge -y
+apt-get clean -y
+
+# 4. Remove system-wide directories
+echo "[3/4] Erasing system-wide configuration and library directories..."
+rm -rf /etc/libreoffice
+rm -rf /usr/lib/libreoffice
+rm -rf /usr/share/libreoffice
+rm -rf /var/lib/libreoffice
+
+# 5. Remove user-specific configuration files
+echo "[4/4] Hunting down user-specific configuration files..."
+
+# Loop through all standard user home directories
+for user_home in /home/*; do
+  if [ -d "$user_home/.config/libreoffice" ]; then
+    echo "      -> Removing configs in $user_home/.config/libreoffice"
+    rm -rf "$user_home/.config/libreoffice"
+  fi
+done
+
+# Check the root user's home directory as well
+if [ -d "/root/.config/libreoffice" ]; then
+    echo "      -> Removing configs in /root/.config/libreoffice"
+    rm -rf "/root/.config/libreoffice"
+fi
+
+echo "----------------------------------------"
+echo "Success: LibreOffice has been completely removed from the system."
+
+
+#!/bin/bash
+
+# 1. Check for root privileges
+if [ "$EUID" -ne 0 ]; then
+  echo "Error: This script must be run as root."
+  echo "Please run again using: sudo ./remove_help.sh"
+  exit 1
+fi
+
+echo "Starting removal of the 'Help' program..."
+echo "----------------------------------------"
+
+# 2. Purge GNOME Help (yelp) and LibreOffice Help packages
+echo "[1/3] Purging help packages via APT..."
+# Removes the GNOME Help viewer (yelp) and any lingering LO help files
+apt-get remove --purge -y yelp libreoffice-help-*
+
+# 3. Clean up orphaned dependencies
+echo "[2/3] Cleaning up unused dependencies..."
+apt-get autoremove --purge -y
+
+# 4. Remove local desktop entries just in case the icon is cached
+echo "[3/3] Clearing lingering desktop icons/cache..."
+rm -f /usr/share/applications/yelp.desktop
+
+# Refresh the GNOME application menu cache (if applicable)
+if command -v update-desktop-database > /dev/null; then
+    update-desktop-database /usr/share/applications
+fi
+
+echo "----------------------------------------"
+echo "Success: The Help program has been removed."
+
+#!/bin/bash
+
+# 1. Check for root privileges
+if [ "$EUID" -ne 0 ]; then
+  echo "Error: This script must be run as root."
+  echo "Please run again using: sudo ./remove_thunderbird.sh"
+  exit 1
+fi
+
+echo "Starting complete Thunderbird removal..."
+echo "----------------------------------------"
+
+# 2. Remove the Snap version (if it exists)
+if command -v snap > /dev/null 2>&1; then
+    echo "[1/5] Checking for and removing Thunderbird Snap package..."
+    snap remove thunderbird || true
+else
+    echo "[1/5] Snap not installed, skipping Snap removal..."
+fi
+
+# 3. Purge the APT version
+echo "[2/5] Purging Thunderbird packages via APT..."
+apt-get remove --purge -y thunderbird*
+
+# 4. Clean up orphaned dependencies
+echo "[3/5] Cleaning up unused dependencies..."
+apt-get autoremove --purge -y
+
+# 5. Remove system-wide directories
+echo "[4/5] Erasing system-wide configuration directories..."
+rm -rf /etc/thunderbird
+rm -rf /usr/lib/thunderbird
+rm -rf /usr/share/thunderbird
+rm -f /usr/share/applications/thunderbird.desktop
+
+# 6. Remove user-specific profile and cache directories
+echo "[5/5] Hunting down user-specific mail profiles and caches..."
+
+for user_home in /home/*; do
+  if [ -d "$user_home/.thunderbird" ]; then
+    echo "      -> Removing profile in $user_home/.thunderbird"
+    rm -rf "$user_home/.thunderbird"
+  fi
+  if [ -d "$user_home/.cache/thunderbird" ]; then
+    echo "      -> Removing cache in $user_home/.cache/thunderbird"
+    rm -rf "$user_home/.cache/thunderbird"
+  fi
+done
+
+# Check root user directories
+if [ -d "/root/.thunderbird" ]; then
+    echo "      -> Removing profile in /root/.thunderbird"
+    rm -rf "/root/.thunderbird"
+fi
+
+echo "----------------------------------------"
+echo "Success: Thunderbird has been completely removed from the system."

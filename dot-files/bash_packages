@@ -125,6 +125,8 @@ install_pkg_from_cache() {
  fi
 }
 
+#sudo DEBIAN_FRONTEND=noninteractive apt install -y cmatrix
+
 # List of tools (Binary:Package or just Package)
 packages=(
  "tmux"
@@ -154,6 +156,7 @@ packages=(
  "mpv"
  "duf"
  "fzf"
+ "git"
  "delta:git-delta"
  "thefuck"
  "shfmt"
@@ -168,6 +171,9 @@ packages=(
  "mc"
  "cmatrix"
  "sysvbanner"
+ "xclip"
+ "htop"
+ "kubecolor"
 )
 
 failed=()
