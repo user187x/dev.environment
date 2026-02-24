@@ -1,9 +1,43 @@
 #!/bin/bash
 
-file="/usr/share/sounds/gnome/default/alerts/hum.ogg"
-gsettings set org.gnome.desktop.sound theme-name 'hum'
+# Define variables for cleaner code
+THEME_DIR="/usr/share/sounds/custom"
+STEREO_DIR="$THEME_DIR/stereo"
+THEME_FILE="$THEME_DIR/index.theme"
+SOURCE_SOUND="/usr/share/sounds/gnome/default/alerts/hum.ogg"
+DEST_SOUND="$STEREO_DIR/bell.oga"
 
-gsettings set org.gnome.desktop.sound event-sounds true
-gsettings set org.gnome.desktop.sound.default-theme 'hum'
+echo "🎵 Starting the Custom Sound Theme Setup..."
 
-canberra-gtk-play -i dialog-warning
+# 1. Create directory structure
+echo "Creating directory structure in /usr/share/sounds..."
+sudo mkdir -p "$STEREO_DIR"
+
+# 2. Create the index.theme file
+# Using 'tee' allows us to write to a protected directory while running the script as a normal user
+echo "Creating theme configuration file..."
+sudo tee "$THEME_FILE" >/dev/null <<EOF
+[Sound Theme]
+Name=custom
+Directories=stereo
+
+[stereo]
+OutputProfile=stereo
+EOF
+
+# 3. Copy the hum sound file
+echo "Copying the 'hum' sound file..."
+if [ -f "$SOURCE_SOUND" ]; then
+ sudo cp "$SOURCE_SOUND" "$DEST_SOUND"
+else
+ echo "❌ Error: Source sound $SOURCE_SOUND not found."
+ echo "Are you sure you are using standard Ubuntu with the GNOME desktop?"
+ exit 1
+fi
+
+# 4. Apply the theme using gsettings (Runs as standard user)
+echo "Applying the custom sound theme to your GNOME profile..."
+gsettings set org.gnome.desktop.sound theme-name custom
+
+echo "✅ Success! The 'hum' alert sound has been set."
+echo "Note: You may need to log out and log back in for changes to take full effect."
