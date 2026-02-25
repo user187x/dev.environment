@@ -39,10 +39,10 @@ kubectl create secret generic tls-ca \
  --namespace cattle-system \
  --dry-run=client -o yaml | kubectl apply -f -
 
-helm upgrade --install rancher rancher-stable/rancher \ 
---version 2.13.2 \ 
---namespace cattle-system \
+helm upgrade --install rancher rancher-stable/rancher \
+ --version 2.13.2 \
+ --namespace cattle-system \
  --create-namespace \
- --set hostname=rancher.xxx \ 
---set ingress.tls.source=secret \
+ --set hostname=rancher.xxx \
+ --set ingress.tls.source=secret \
  --set privateCA=true
