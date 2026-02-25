@@ -3,26 +3,26 @@
 PASS=1
 MINIKUBE_PROFILE="minikube"
 
-pki-generator
+./pki-generator
 
 declare -A pki
 
 pki["CRT"]="../../tls/certs/server-wildcard.crt"
-pki["KEY"]="../../tls/certs/server-wildcard.crt"
+pki["KEY"]="../../tls/certs/server-wildcard.key"
 pki["CA"]="../../tls/certs/ca-cert.pem"
 
-for cert in "${!certs[@]}"; do
- if [[ ! -f "${certs[$cert]}" ]]; then
-  echo -e "\e[91m(!)\e[0m Certficate not found: ${certs[$cert]}"
-  fail=1
+for cert in "${!pki[@]}"; do
+ if [[ ! -f "${pki[$cert]}" ]]; then
+  echo -e "\e[91m(!)\e[0m Certficate not found: ${pki[$cert]}"
+  exit
+ else
+  echo -e "(\e[93mi\e[0m) Using certficate: ${pki[$cert]}" 
  fi
 done
 
-if ! (( PASS )); then
- echo "(!) Certificats not found"
- exit 1
-fi
-
+echo "${certs[CA]}"
+echo "${certs[KEY]}"
+echo "${certs[CRT]}"
 
 if minikube status -p "$MINIKUBE_PROFILE" >/dev/null 2>&1; then
  echo "✅ Profile '$MINIKUBE_PROFILE' is already running."
@@ -48,8 +48,8 @@ kubectl create namespace cattle-system --dry-run=client -o yaml | kubectl apply 
 
 # Create the Rancher TLS secret
 kubectl create secret tls tls-rancher-ingress \
- --cert="${certs[CRT]}" \
- --key="${certs[KEY]}" \
+ --cert="${pki[CRT]}" \
+ --key="${pki[KEY]}" \
  --namespace cattle-system \
  --dry-run=client -o yaml | kubectl apply -f -
 
@@ -67,7 +67,7 @@ kubectl annotate secret tls-rancher-ingress -n cattle-system \
 
 # Create the Rancher Ca-Cert
 kubectl create secret generic tls-ca \
- --from-file=cacerts.pem="${certs[CA]}" \
+ --from-file=cacerts.pem="${pki[CA]}" \
  --namespace cattle-system \
  --dry-run=client -o yaml | kubectl apply -f -
 

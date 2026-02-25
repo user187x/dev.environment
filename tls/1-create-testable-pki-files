@@ -44,7 +44,7 @@ ca_args=(
   -sha256
   -days 365
   -out ca-cert.pem
-  -subj "/O=XXX Root CA/CN=${DOMAIN} Test Root CA"
+  -subj "/O=XXX Root CA/CN=${DOMAIN} Root CA"
 )
 openssl req "${ca_args[@]}"
 
