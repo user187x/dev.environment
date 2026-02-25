@@ -1,0 +1,48 @@
+#!/bin/bash
+
+minikube_check=0
+
+if ((minikube_check == 1)); then
+ minikube start \
+  --kubernetes-version=v1.34.0 \
+  --memory=12000 \
+  --cpus=8
+fi
+
+minikube addons enable ingress
+
+helm repo add jetstack https://charts.jetstack.io >/dev/null 2>&1
+helm repo update
+
+helm repo add rancher-stable https://releases.rancher.com/server-charts/stable >/dev/null 2>&1
+helm repo update
+
+kubectl create namespace cert-manager \
+ --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl create namespace cattle-system \
+ --dry-run=client -o yaml | kubectl apply -f -
+
+helm upgrade --install cert-manager jetstack/cert-manager \
+ --namespace cert-manager \
+ --create-namespace \
+ --set crds.enabled=true
+
+kubectl create secret tls tls-rancher-ingress \
+ --cert=server-wildcard.crt \
+ --key=server-wildcard.key \
+ --namespace cattle-system \
+ --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl create secret generic tls-ca \
+ --from-file=cacerts.pem=ca-cert.pem \
+ --namespace cattle-system \
+ --dry-run=client -o yaml | kubectl apply -f -
+
+helm upgrade --install rancher rancher-stable/rancher \ 
+--version 2.13.2 \ 
+--namespace cattle-system \
+ --create-namespace \
+ --set hostname=rancher.xxx \ 
+--set ingress.tls.source=secret \
+ --set privateCA=true
