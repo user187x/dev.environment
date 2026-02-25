@@ -1,7 +1,9 @@
 #!/bin/bash
 
-minikube_check=0
-pass=1
+PASS=1
+MINIKUBE_PROFILE="minikube"
+
+pki-generator
 
 declare -A pki
 
@@ -16,12 +18,16 @@ for cert in "${!certs[@]}"; do
  fi
 done
 
-if ! (( pass )); then
- echo "(i) Generating new certificats..."
- ../../1-create-testable-pki-files
+if ! (( PASS )); then
+ echo "(!) Certificats not found"
+ exit 1
 fi
 
-if ((minikube_check == 1)); then
+
+if minikube status -p "$MINIKUBE_PROFILE" >/dev/null 2>&1; then
+ echo "✅ Profile '$MINIKUBE_PROFILE' is already running."
+else
+ echo "🚀 Profile '$MINIKUBE_PROFILE' is not running. Starting..."
  minikube start \
   --kubernetes-version=v1.34.0 \
   --memory=12000 \

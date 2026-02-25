@@ -10,9 +10,10 @@ then
  AUTO_MODE=1
 fi
 
-echo "======================="
-echo " 🔒 TLS PKI Generator"
-echo "======================="
+echo
+echo -e "\e[90m======================="
+echo -e " 🔒 TLS PKI Generator"
+echo -e "=======================\e[0m"
 
 # 1. Prompt the user for the domain name
 if ! ((AUTO_MODE));
@@ -29,8 +30,7 @@ mkdir -p "$OUT_DIR"
 cd "$OUT_DIR"
 
 echo
-echo -e " (i) Generating Root Certificate Authority (CA)..."
-echo
+echo -e "(i) Generating Root Certificate Authority (CA)..."
 
 # Generate CA Private Key
 openssl genrsa -out ca.key 4096
@@ -49,10 +49,10 @@ ca_args=(
 openssl req "${ca_args[@]}"
 
 echo
-echo -e " (i) Generating Specific Server Certificate (${DOMAIN})..."
+echo -e "(i) Generating Server Certificate (${DOMAIN})..."
 
 # Generate Server Private Key
-openssl genrsa -out server.key 2048
+openssl genrsa -out server.key 4096
 
 # Generate Server Certificate Signing Request (CSR)
 server_csr_args=(
@@ -88,10 +88,10 @@ server_cert_args=(
 openssl x509 "${server_cert_args[@]}"
 
 echo
-echo -e " (i) Generating Wildcard Server Certificate (*.${DOMAIN})..."
+echo -e "(i) Generating Wildcard Server Certificate (*.${DOMAIN})..."
 
 # Generate Wildcard Private Key
-openssl genrsa -out server-wildcard.key 2048
+openssl genrsa -out server-wildcard.key 4096
 
 # Generate Wildcard CSR
 wildcard_csr_args=(
@@ -128,10 +128,10 @@ wildcard_cert_args=(
 openssl x509 "${wildcard_cert_args[@]}"
 
 echo
-echo -e " (i) Generating Client Certificate (for mTLS)..."
+echo -e "(i) Generating Client Certificate (for mTLS)..."
 
 # Generate Client Private Key
-openssl genrsa -out client.key 2048
+openssl genrsa -out client.key 4096
 
 # Generate Client CSR
 client_csr_args=(
@@ -156,12 +156,13 @@ client_cert_args=(
 openssl x509 "${client_cert_args[@]}"
 
 echo
-echo " (i) Verifying Certificates..."
+echo -e "\e[90m(*) Verifying Certificates..."
 # Verify the generated certificates against the CA
 openssl verify -CAfile ca-cert.pem server.crt server-wildcard.crt client.crt 
+echo -e "\e[0m"
 
+echo -e "(i) File Location: \e[92m./${OUT_DIR}/\e[0m"
 echo
-echo " File Location: ./${OUT_DIR}/"
 
 file_list=(
   *.pem
@@ -172,5 +173,5 @@ file_list=(
 ls -l "${file_list[@]}" 
 
 echo
-echo " ✅ PKI Generation Complete!"
+echo -e " ✅ \e[92mPKI Generation Complete!\e[0m"
 echo
