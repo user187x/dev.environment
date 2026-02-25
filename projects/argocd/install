@@ -1,0 +1,8 @@
+#!/bin/bash
+
+kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl create -n argocd secret generic argocd-server-tls \
+ --from-file=tls.crt=/path/to/your/tls.pem \
+ --from-file=tls.key=/path/to/your/tls.key \
+ --from-file=ca.crt=/path/to/your/ca.pem

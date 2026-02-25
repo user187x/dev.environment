@@ -1,38 +1,69 @@
 #!/bin/bash
-# Exit immediately if a command exits with a non-zero status.
 set -e
 
-echo "==================================================="
-echo " 🔒 Local TLS PKI Generator for Integration Testing"
-echo "==================================================="
+AUTO_MODE=0
+DOMAIN="rancher.xxx"
 
-# 1. Prompt the user for the domain name
-read -p "Enter the base domain name for testing (e.g., myapp.local): " DOMAIN
-
-if [ -z "$DOMAIN" ]; then
- echo "Error: Domain name cannot be empty."
- exit 1
+# If not argument passed in
+if [[ "$#" -eq 0 ]];
+then
+ AUTO_MODE=1
 fi
 
-# Create an output directory based on the domain to keep things organized
-OUT_DIR="certs-${DOMAIN}"
+echo "======================="
+echo " 🔒 TLS PKI Generator"
+echo "======================="
+
+# 1. Prompt the user for the domain name
+if ! ((AUTO_MODE));
+then
+ read -e -p " (?) Enter the desired Domain [default: $DOMAIN]: " -i "$DOMAIN" DOMAIN
+ DOMAIN=${DOMAIN:-rancher.xxx}
+ echo "The domain is: $DOMAIN"
+fi
+
+# Create an output directory
+OUT_DIR="certs"
 mkdir -p "$OUT_DIR"
+
 cd "$OUT_DIR"
 
-echo -e "\n[1/4] Generating Root Certificate Authority (CA)..."
+echo
+echo -e " (i) Generating Root Certificate Authority (CA)..."
+echo
+
 # Generate CA Private Key
 openssl genrsa -out ca.key 4096
-# Generate CA Root Certificate
-openssl req -x509 -new -nodes -key ca.key -sha256 -days 3650 -out ca-cert.pem \
- -subj "/C=US/ST=Development/L=Local/O=Test Root CA/CN=${DOMAIN} Test Root CA"
 
-echo -e "\n[2/4] Generating Specific Server Certificate (${DOMAIN})..."
+# Generate CA Root Certificate
+ca_args=(
+  -x509
+  -new
+  -nodes
+  -key ca.key
+  -sha256
+  -days 365
+  -out ca-cert.pem
+  -subj "/O=XXX Root CA/CN=${DOMAIN} Test Root CA"
+)
+openssl req "${ca_args[@]}"
+
+echo
+echo -e " (i) Generating Specific Server Certificate (${DOMAIN})..."
+
 # Generate Server Private Key
 openssl genrsa -out server.key 2048
+
 # Generate Server Certificate Signing Request (CSR)
-openssl req -new -key server.key -out server.csr \
- -subj "/C=US/ST=Development/L=Local/O=Test Server/CN=${DOMAIN}"
-# Create an extension file for Subject Alternative Names (SAN) - Required by modern browsers
+server_csr_args=(
+  -new
+  -key server.key
+  -out server.csr
+  -subj "/O=XXX Cert/CN=${DOMAIN}"
+)
+openssl req "${server_csr_args[@]}"
+
+# Create an extension file for Subject Alternative Names (SAN)
 cat >server-ext.cnf <<EOF
 authorityKeyIdentifier=keyid,issuer
 basicConstraints=CA:FALSE
@@ -41,16 +72,36 @@ subjectAltName = @alt_names
 [alt_names]
 DNS.1 = ${DOMAIN}
 EOF
-# Generate the Server Certificate
-openssl x509 -req -in server.csr -CA ca-cert.pem -CAkey ca.key -CAcreateserial \
- -out server.crt -days 365 -sha256 -extfile server-ext.cnf
 
-echo -e "\n[3/4] Generating Wildcard Server Certificate (*.${DOMAIN})..."
+# Generate the Server Certificate
+server_cert_args=(
+  -req
+  -in server.csr
+  -CA ca-cert.pem
+  -CAkey ca.key
+  -CAcreateserial
+  -out server.crt
+  -days 365
+  -sha256
+  -extfile server-ext.cnf
+)
+openssl x509 "${server_cert_args[@]}"
+
+echo
+echo -e " (i) Generating Wildcard Server Certificate (*.${DOMAIN})..."
+
 # Generate Wildcard Private Key
 openssl genrsa -out server-wildcard.key 2048
+
 # Generate Wildcard CSR
-openssl req -new -key server-wildcard.key -out server-wildcard.csr \
- -subj "/C=US/ST=Development/L=Local/O=Test Wildcard/CN=*.${DOMAIN}"
+wildcard_csr_args=(
+  -new
+  -key server-wildcard.key
+  -out server-wildcard.csr
+  -subj "/O=XXX Wildcard Cert/CN=*.${DOMAIN}"
+)
+openssl req "${wildcard_csr_args[@]}"
+
 # Create extension file for Wildcard SANs
 cat >wildcard-ext.cnf <<EOF
 authorityKeyIdentifier=keyid,issuer
@@ -61,22 +112,65 @@ subjectAltName = @alt_names
 DNS.1 = *.${DOMAIN}
 DNS.2 = ${DOMAIN}
 EOF
-# Generate the Wildcard Certificate
-openssl x509 -req -in server-wildcard.csr -CA ca-cert.pem -CAkey ca.key -CAcreateserial \
- -out server-wildcard.crt -days 365 -sha256 -extfile wildcard-ext.cnf
 
-echo -e "\n[4/4] Generating Client Certificate (for mTLS)..."
+# Generate the Wildcard Certificate
+wildcard_cert_args=(
+  -req
+  -in server-wildcard.csr
+  -CA ca-cert.pem
+  -CAkey ca.key
+  -CAcreateserial
+  -out server-wildcard.crt
+  -days 365
+  -sha256
+  -extfile wildcard-ext.cnf
+)
+openssl x509 "${wildcard_cert_args[@]}"
+
+echo
+echo -e " (i) Generating Client Certificate (for mTLS)..."
+
 # Generate Client Private Key
 openssl genrsa -out client.key 2048
-# Generate Client CSR
-openssl req -new -key client.key -out client.csr \
- -subj "/C=US/ST=Development/L=Local/O=Test Client/CN=client.${DOMAIN}"
-# Generate the Client Certificate
-openssl x509 -req -in client.csr -CA ca-cert.pem -CAkey ca.key -CAcreateserial \
- -out client.crt -days 365 -sha256
 
-echo -e "\n==================================================="
+# Generate Client CSR
+client_csr_args=(
+  -new
+  -key client.key
+  -out client.csr
+  -subj "/O=XXX Client/CN=client.${DOMAIN}"
+)
+openssl req "${client_csr_args[@]}"
+
+# Generate the Client Certificate
+client_cert_args=(
+  -req
+  -in client.csr
+  -CA ca-cert.pem
+  -CAkey ca.key
+  -CAcreateserial
+  -out client.crt
+  -days 365
+  -sha256
+)
+openssl x509 "${client_cert_args[@]}"
+
+echo
+echo " (i) Verifying Certificates..."
+# Verify the generated certificates against the CA
+openssl verify -CAfile ca-cert.pem server.crt server-wildcard.crt client.crt 
+
+echo
+echo " File Location: ./${OUT_DIR}/"
+
+file_list=(
+  *.pem
+  *.crt
+  *.key
+  *.csr
+)
+ls -l "${file_list[@]}" 
+
+echo
 echo " ✅ PKI Generation Complete!"
-echo " All generated files are located in: ./${OUT_DIR}/"
-echo "==================================================="
-ls -l *.pem *.crt *.key *.csr
+echo
