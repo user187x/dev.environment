@@ -1,0 +1,40 @@
+#!/bin/bash
+
+EMAIL="xxx@xxx.com"
+PRIVATE_KEY="$HOME/.ssh/id_rsa"
+PUBLIC_KEY="$HOME/.ssh/id_rsa.pub"
+
+echo "Starting SSH key generation..."
+
+expect <<EOF
+set timeout -1
+spawn ssh-keygen -t rsa -b 4096 -C "$EMAIL"
+
+expect "Enter file in which to save the key"
+send "\r"
+
+# Handle the passphrase, but also watch out for the overwrite prompt
+expect {
+ "Overwrite (y/n)?" {
+   send "y\r"
+   exp_continue
+ }
+ "Enter passphrase (empty for no passphrase):" {
+   send "\r"
+ }
+}
+
+expect "Enter same passphrase again:"
+send "\r"
+
+expect eof
+EOF
+
+if [[ -f "$PRIVATE_KEY" && -f "$PUBLIC_KEY" ]]; then
+ echo "✅ Success! Keys were found in the default location:"
+ echo "   - $PRIVATE_KEY"
+ echo "   - $PUBLIC_KEY"
+else
+ echo "❌ Error: Could not find the generated keys in $HOME/.ssh/"
+ exit 1
+fi
