@@ -7,9 +7,9 @@ MINIKUBE_PROFILE="minikube"
 
 declare -A pki
 
-pki["CRT"]="../../tls/certs/server-wildcard.crt"
-pki["KEY"]="../../tls/certs/server-wildcard.key"
-pki["CA"]="../../tls/certs/ca-cert.pem"
+pki["CRT"]="./server-wildcard.crt"
+pki["KEY"]="./server-wildcard.key"
+pki["CA"]="./ca-cert.pem"
 
 for cert in "${!pki[@]}"; do
  if [[ ! -f "${pki[$cert]}" ]]; then
@@ -23,6 +23,13 @@ done
 echo "${certs[CA]}"
 echo "${certs[KEY]}"
 echo "${certs[CRT]}"
+
+echo "Terminating Minikube instance in 5 seconds...."
+sleep 5
+minikube delete
+
+rm -rf ~/.minikube
+rm -rf ~/.kube
 
 if minikube status -p "$MINIKUBE_PROFILE" >/dev/null 2>&1; then
  echo "✅ Profile '$MINIKUBE_PROFILE' is already running."
