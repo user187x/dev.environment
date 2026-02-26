@@ -1,0 +1,63 @@
+#!/bin/bash
+
+SERVICE_NAME="update-system"
+SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
+
+# Check for root privileges
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root (use sudo)."
+   exit 1
+fi
+
+install_service() {
+    echo "Installing ${SERVICE_NAME}..."
+
+    # Create the service file
+    cat <<EOF > "$SERVICE_PATH"
+[Unit]
+Description=Auto Update System on Startup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'apt update && apt full-upgrade -y && apt autoremove -y && apt autoclean'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Set permissions and register
+    chmod 644 "$SERVICE_PATH"
+    systemctl daemon-reload
+    systemctl enable "$SERVICE_NAME"
+    echo "Service installed and enabled for startup."
+}
+
+remove_service() {
+    echo "Removing ${SERVICE_NAME}..."
+
+    # Stop, disable, and delete
+    systemctl stop "$SERVICE_NAME" 2>/dev/null
+    systemctl disable "$SERVICE_NAME" 2>/dev/null
+    rm -f "$SERVICE_PATH"
+    systemctl daemon-reload
+    systemctl reset-failed
+    
+    echo "Service removed completely."
+}
+
+# Argument Logic
+case "$1" in
+    install)
+        install_service
+        ;;
+    remove)
+        remove_service
+        ;;
+    *)
+        echo "Usage: $0 {install|remove}"
+        exit 1
+        ;;
+esac
