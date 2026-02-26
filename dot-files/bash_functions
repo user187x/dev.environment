@@ -18,6 +18,28 @@ NC='\e[0m'   # No Color
 # UTILITY FUNCTIONS
 ############################################
 
+now() {
+ TZ='America/New_York' date +'%I:%M:%S %p'
+}
+
+clock() {
+  # 1. Dependency check
+  if ! command -v toilet >/dev/null || ! command -v watch >/dev/null; then
+    echo -e " ${R}(!)${NC} Dependencies [toilet] and [watch] are required."
+    echo " Install them with: sudo apt install toilet watch -y"
+    return 1
+  fi
+
+  echo -e " ${G}(i)${NC} Starting Live Clock (Press ${Y}Ctrl+C${NC} to exit)..."
+  
+  # 2. Execute the watch command
+  # -t hides the watch header for a cleaner look
+  # TZ variable ensures New York time regardless of system settings
+  # date format %I:%M:%S %p provides 12-hour time with AM/PM
+  watch -t -n 1 "export TZ='America/New_York'; date +'%I:%M:%S %p' | toilet -f future --filter border:gay"
+}
+export -f clock
+
 clipboard() {
   local G='\033[0;92m'
   local R='\033[0;91m'
