@@ -191,10 +191,7 @@ main() {
  echo -e "${C_YELLOW} Setup Complete!${C_RESET}"
  echo
 
- echo " (1) Restart Terminal (or type: exec bash)"
- echo " (2) Start Tmux, then prese <Ctrl + Space> + <I> to intialize the plugins."
- echo
-
+ exec bash
 }
 
 # Execute

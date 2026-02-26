@@ -3,7 +3,7 @@
 if [[ -n "${__BASH_FUNCTIONS__:-}" ]]; then
  return 0
 fi
- 
+
 __BASH_FUNCTIONS__=1
 
 # Define global colors for consistency across functions
@@ -144,88 +144,103 @@ terminal_depth() {
 
 export -f terminal_depth
 
-fz() {
+function fz {
 
- # Dependency check
+ export FZF_DEFAULT_OPTS="--bind 'space:toggle-in'"
+
  if ! command -v fzf >/dev/null || ! command -v whiptail >/dev/null; then
   echo "Dependencies [fzf] and [whiptail] are required. Installing now..."
-  sudo apt install fzf -y && sudo apt install whiptail -y
-
-  if ! command -v fzf >/dev/null || ! command -v whiptail >/dev/null; then
-   echo "Dependencies are missing. Terminating"
-   exit 1
-  fi
+  sudo apt update && sudo apt install fzf whiptail -y
+  if ! command -v fzf >/dev/null; then return 1; fi
  fi
 
- local selected_item
- selected_item="$(fzf "$@")"
+ local search_path="."
+ if [[ -d "$1" ]]; then
+  search_path="$1"
+  shift # Remove the path from arguments so "$@" only contains fzf flags
+ fi
 
- if [[ -n "$selected_item" ]]; then
-  local extension="${selected_item##*.}"
-  local directory
+ local selected_items
+ selected_items=$(find "$search_path" -maxdepth 3 2>/dev/null | fzf -m "$@")
 
-  # Handle if user selected a directory or a file
-  if [[ -d "$selected_item" ]]; then
-   directory="$selected_item"
+ [[ -z "$selected_items" ]] && return 0
+
+ mapfile -t selections <<<"$selected_items"
+ local first_selection="${selections[0]}"
+ local absPath=$(realpath "$first_selection")
+ local baseName=$(basename "$first_selection")
+ local count=${#selections[@]}
+
+ local directory
+ if [[ -d "$absPath" ]]; then
+  directory="$absPath"
+ else
+  directory=$(dirname "$absPath")
+ fi
+
+ local extension="${first_selection##*.}"
+ local tool_label="System Default"
+ [[ "$extension" == "mp3" ]] && tool_label="Play Audio"
+ [[ -x /usr/bin/gedit ]] && tool_label="Gedit"
+
+ # 5. Whiptail Menu
+ local menu_title="Fuzzy Action ($count items)"
+ [[ $count -eq 1 ]] && menu_title="Fuzzy Action: $baseName"
+
+ local option
+ option=$(whiptail --title "$menu_title" \
+  --menu "Choose action for $count selected item(s):" 18 80 8 \
+  "View" "Preview first item with bat" \
+  "Edit" "Open all in Vim" \
+  "OpenWith" "Open with $tool_label" \
+  "OpenDir" "Open parent directory" \
+  "GoTo" "CD to parent directory (Single only)" \
+  "Delete" "Remove selected items (Careful!)" \
+  "Exit" "Cancel" \
+  3>&1 1>&2 2>&3)
+
+ case "$option" in
+ "View")
+  bat "${selections[@]}"
+  ;;
+ "Edit")
+  # Opens all selected files in vim buffers
+  if [ -w "$absPath" ]; then
+   vim -p "${selections[@]}"
   else
-   directory=$(dirname "$selected_item")
+   sudo vim -p "${selections[@]}"
   fi
-
-  # Determine default tool based on extension
-  local tool_label="System Default"
-  if [[ "$extension" == "mp3" ]]; then
-   tool_label="Play Audio"
-  elif [[ -x /usr/bin/gedit ]]; then
-   tool_label="Gedit"
-  fi
-
-  # Whiptail Menu
-  local option
-  option=$(whiptail --title "Fuzzy Action: $(basename "$selected_item")" \
-   --menu "Choose an action:" 15 60 6 \
-   "1" "View File (Bat)" \
-   "2" "Edit (Vim)" \
-   "3" "$tool_label" \
-   "4" "Open Directory (GUI)" \
-   "5" "CD to Directory" \
-   "6" "Cancel" \
-   3>&1 1>&2 2>&3)
-
-  case "$option" in
-  "1")
-   bat "$selected_item"
-   ;;
-  "2")
-   # Use sudo if not writable
-   if [ -w "$selected_item" ]; then
-    vim "$selected_item"
-   else
-    sudo vim "$selected_item"
-   fi
-   ;;
-  "3")
+  ;;
+ "OpenWith")
+  for item in "${selections[@]}"; do
+   local full_path=$(realpath "$item")
    if [[ "$extension" == "mp3" ]]; then
-    echo "Listening to: $selected_item"
-    mpv --no-video "$selected_item" >/dev/null 2>&1
+    mpv --no-video "$full_path" >/dev/null 2>&1 &
    elif [[ "$tool_label" == "Gedit" ]]; then
-    nohup gedit "$selected_item" >/dev/null 2>&1 &
+    nohup gedit "$full_path" >/dev/null 2>&1 &
    else
-    xdg-open "$selected_item" >/dev/null 2>&1
+    xdg-open "$full_path" >/dev/null 2>&1 &
    fi
-   ;;
-  "4")
-   xdg-open "$directory" >/dev/null 2>&1
-   ;;
-  "5")
-   echo -e "${M}Changing directory to: ${G}$directory${NC}"
-   cd "$directory" || return
-   ls -F --color=auto
-   ;;
-  *)
-   return 0
-   ;;
-  esac
- fi
+  done
+  ;;
+ "OpenDir")
+  xdg-open "$directory" >/dev/null 2>&1
+  ;;
+ "GoTo")
+  echo -e "${M}Changing directory to: ${G}$directory${NC}"
+  cd "$directory" || return
+  ls -F --color=auto
+  ;;
+ "Delete")
+  if (whiptail --title "Confirm Delete" --yesno "Are you sure you want to delete $count items?" 10 60); then
+   rm -rf "${selections[@]}"
+   echo -e "${R}Deleted $count items.${NC}"
+  fi
+  ;;
+ *)
+  return 0
+  ;;
+ esac
 }
 
 qr-code() {

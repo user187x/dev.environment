@@ -20,6 +20,9 @@ HISTSIZE=100000000
 export LESSHISTFILE="$HOME/.config/.less_history"
 export HISTFILE="$HOME/.config/.bash_history"
 
+# Change fzy search to select multiple with spacebar
+export FZF_DEFAULT_OPTS="--bind 'space:toggle-in'"
+
 shopt -s histappend
 
 # Add directory to PATH
