@@ -23,86 +23,86 @@ now() {
 }
 
 clock() {
-  # 1. Dependency check
-  if ! command -v toilet >/dev/null || ! command -v watch >/dev/null; then
-    echo -e " ${R}(!)${NC} Dependencies [toilet] and [watch] are required."
-    echo " Install them with: sudo apt install toilet watch -y"
-    return 1
-  fi
+ # 1. Dependency check
+ if ! command -v toilet >/dev/null || ! command -v watch >/dev/null; then
+  echo -e " ${R}(!)${NC} Dependencies [toilet] and [watch] are required."
+  echo " Install them with: sudo apt install toilet watch -y"
+  return 1
+ fi
 
-  echo -e " ${G}(i)${NC} Starting Live Clock (Press ${Y}Ctrl+C${NC} to exit)..."
-  
-  # 2. Execute the watch command
-  # -t hides the watch header for a cleaner look
-  # TZ variable ensures New York time regardless of system settings
-  # date format %I:%M:%S %p provides 12-hour time with AM/PM
-  watch -t -n 1 "export TZ='America/New_York'; date +'%I:%M:%S %p' | toilet -f future --filter border:gay"
+ echo -e " ${G}(i)${NC} Starting Live Clock (Press ${Y}Ctrl+C${NC} to exit)..."
+
+ # 2. Execute the watch command
+ # -t hides the watch header for a cleaner look
+ # TZ variable ensures New York time regardless of system settings
+ # date format %I:%M:%S %p provides 12-hour time with AM/PM
+ watch -t -n 1 "export TZ='America/New_York'; date +'%I:%M:%S %p' | toilet -f future --filter border:gay"
 }
 export -f clock
 
 clipboard() {
-  local G='\033[0;92m'
-  local R='\033[0;91m'
-  local Y='\033[1;93m'
-  local M='\033[0;90m'
-  local NC='\033[0m'
+ local G='\033[0;92m'
+ local R='\033[0;91m'
+ local Y='\033[1;93m'
+ local M='\033[0;90m'
+ local NC='\033[0m'
 
-  local _temp_buffer
-  _temp_buffer=$(mktemp) # Create a temporary file to hold concatenated content
-  trap 'rm -f "$_temp_buffer"' EXIT # Ensure temp file is cleaned up
+ local _temp_buffer
+ _temp_buffer=$(mktemp)            # Create a temporary file to hold concatenated content
+ trap 'rm -f "$_temp_buffer"' EXIT # Ensure temp file is cleaned up
 
-  # --- Input Logic ---
+ # --- Input Logic ---
+ if [[ $# -gt 0 ]]; then
+  # Multiple Files Path
+  local found_any=false
+  for file in "$@"; do
+   if [[ -f "$file" ]]; then
+    cat "$file" >>"$_temp_buffer"
+    # Add a newline between files if multiple are passed
+    [[ $# -gt 1 ]] && echo "" >>"$_temp_buffer"
+    found_any=true
+   else
+    echo -e " ${R}(!)${NC} File not found: $file"
+   fi
+  done
+
+  if [[ "$found_any" == "false" ]]; then
+   return 1
+  fi
+ elif [[ -p /dev/stdin ]]; then
+  # Pipe/Stdin Path
+  cat >"$_temp_buffer"
+ else
+  echo -e " ${G}(i)${NC} Usage: \e[1;27mclipboard\e[0m ${Y}<file1> <file2> ...${NC} or \e[1;27mcommand\e[0m | \e[1;27mclipboard\e[0m"
+  return 1
+ fi
+
+ # --- Clipboard Detection & Execution ---
+ local success=false
+
+ # Wayland
+ if [[ -n "$WAYLAND_DISPLAY" ]] && command -v wl-copy >/dev/null; then
+  wl-copy <"$_temp_buffer" && success=true
+
+ # X11 (xclip)
+ elif [[ -n "$DISPLAY" ]] && command -v xclip >/dev/null; then
+  xclip -selection clipboard -i "$_temp_buffer" && success=true
+
+ # X11 (xsel fallback)
+ elif [[ -n "$DISPLAY" ]] && command -v xsel >/dev/null; then
+  xsel --clipboard --input <"$_temp_buffer" && success=true
+ fi
+
+ if [[ "$success" == "true" ]]; then
   if [[ $# -gt 0 ]]; then
-    # Multiple Files Path
-    local found_any=false
-    for file in "$@"; do
-      if [[ -f "$file" ]]; then
-        cat "$file" >> "$_temp_buffer"
-        # Add a newline between files if multiple are passed
-        [[ $# -gt 1 ]] && echo "" >> "$_temp_buffer"
-        found_any=true
-      else
-        echo -e " ${R}(!)${NC} File not found: $file"
-      fi
-    done
-
-    if [[ "$found_any" == "false" ]]; then
-      return 1
-    fi
-  elif [[ -p /dev/stdin ]]; then
-    # Pipe/Stdin Path
-    cat > "$_temp_buffer"
+   echo -e "${M} Contents of ${G}$# file(s)${NC}${M} copied to system clipboard.${NC}"
   else
-    echo -e " ${G}(i)${NC} Usage: \e[1;27mclipboard\e[0m ${Y}<file1> <file2> ...${NC} or \e[1;27mcommand\e[0m | \e[1;27mclipboard\e[0m"
-    return 1
+   echo -e "${G} Input copied to system clipboard.${NC}"
   fi
-
-  # --- Clipboard Detection & Execution ---
-  local success=false
-
-  # Wayland
-  if [[ -n "$WAYLAND_DISPLAY" ]] && command -v wl-copy >/dev/null; then
-    wl-copy < "$_temp_buffer" && success=true
-
-  # X11 (xclip)
-  elif [[ -n "$DISPLAY" ]] && command -v xclip >/dev/null; then
-    xclip -selection clipboard -i "$_temp_buffer" && success=true
-
-  # X11 (xsel fallback)
-  elif [[ -n "$DISPLAY" ]] && command -v xsel >/dev/null; then
-    xsel --clipboard --input < "$_temp_buffer" && success=true
-  fi
-
-  if [[ "$success" == "true" ]]; then
-    if [[ $# -gt 0 ]]; then
-      echo -e "${M} Contents of ${G}$# file(s)${NC}${M} copied to system clipboard.${NC}"
-    else
-      echo -e "${G} Input copied to system clipboard.${NC}"
-    fi
-  else
-    echo -e " ${R}(!)${NC} Could not detect a valid clipboard utility."
-    return 1
-  fi
+ else
+  echo -e " ${R}(!)${NC} Could not detect a valid clipboard utility."
+  return 1
+ fi
 }
 
 fmt() {
