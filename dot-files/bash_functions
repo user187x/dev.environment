@@ -19,84 +19,69 @@ NC='\e[0m'   # No Color
 ############################################
 
 clipboard() {
- local G='\033[0;92m'
- local R='\033[0;91m'
- local Y='\033[1;93m'
- local M='\033[0;90m'
- local NC='\033[0m'
+  local G='\033[0;92m'
+  local R='\033[0;91m'
+  local Y='\033[1;93m'
+  local M='\033[0;90m'
+  local NC='\033[0m'
 
- local file="$1"
- local _input_source=""
+  local _temp_buffer
+  _temp_buffer=$(mktemp) # Create a temporary file to hold concatenated content
+  trap 'rm -f "$_temp_buffer"' EXIT # Ensure temp file is cleaned up
 
- # --- Input Validation ---
- if [[ -n "$file" ]]; then
-  if [[ ! -f "$file" ]]; then
-   echo -e " ${R}(!)${NC} File not found: $file"
-   return 1
-  fi
-  _input_source="file"
- elif [[ -p /dev/stdin ]]; then
-  _input_source="stdin"
- else
-  echo -e " ${G}(i)${NC} Usage: \e[1;27mclipboard\e[0m ${Y}<file>${NC} or \e[1;27mcommand\e[0m | \e[1;27mclipboard\e[0m"
-  return 1
- fi
+  # --- Input Logic ---
+  if [[ $# -gt 0 ]]; then
+    # Multiple Files Path
+    local found_any=false
+    for file in "$@"; do
+      if [[ -f "$file" ]]; then
+        cat "$file" >> "$_temp_buffer"
+        # Add a newline between files if multiple are passed
+        [[ $# -gt 1 ]] && echo "" >> "$_temp_buffer"
+        found_any=true
+      else
+        echo -e " ${R}(!)${NC} File not found: $file"
+      fi
+    done
 
- # 1. macOS
- if [[ "$(uname)" == "Darwin" ]] && command -v pbcopy >/dev/null; then
-  if [[ "$_input_source" == "file" ]]; then
-   pbcopy <"$file"
+    if [[ "$found_any" == "false" ]]; then
+      return 1
+    fi
+  elif [[ -p /dev/stdin ]]; then
+    # Pipe/Stdin Path
+    cat > "$_temp_buffer"
   else
-   cat | pbcopy
+    echo -e " ${G}(i)${NC} Usage: \e[1;27mclipboard\e[0m ${Y}<file1> <file2> ...${NC} or \e[1;27mcommand\e[0m | \e[1;27mclipboard\e[0m"
+    return 1
   fi
 
- # 2. Wayland (Only if WAYLAND_DISPLAY is set)
- elif [[ -n "$WAYLAND_DISPLAY" ]] && command -v wl-copy >/dev/null; then
-  if [[ "$_input_source" == "file" ]]; then
-   wl-copy <"$file"
+  # --- Clipboard Detection & Execution ---
+  local success=false
+
+  # Wayland
+  if [[ -n "$WAYLAND_DISPLAY" ]] && command -v wl-copy >/dev/null; then
+    wl-copy < "$_temp_buffer" && success=true
+
+  # X11 (xclip)
+  elif [[ -n "$DISPLAY" ]] && command -v xclip >/dev/null; then
+    xclip -selection clipboard -i "$_temp_buffer" && success=true
+
+  # X11 (xsel fallback)
+  elif [[ -n "$DISPLAY" ]] && command -v xsel >/dev/null; then
+    xsel --clipboard --input < "$_temp_buffer" && success=true
+  fi
+
+  if [[ "$success" == "true" ]]; then
+    if [[ $# -gt 0 ]]; then
+      echo -e "${M} Contents of ${G}$# file(s)${NC}${M} copied to system clipboard.${NC}"
+    else
+      echo -e "${G} Input copied to system clipboard.${NC}"
+    fi
   else
-   cat | wl-copy
+    echo -e " ${R}(!)${NC} Could not detect a valid clipboard utility."
+    return 1
   fi
-
- # 3. WSL (Windows Subsystem for Linux)
- elif grep -q "Microsoft" /proc/version 2>/dev/null && command -v clip.exe >/dev/null; then
-  if [[ "$_input_source" == "file" ]]; then
-   cat "$file" | clip.exe
-  else
-   cat | clip.exe
-  fi
-
- # 4. X11 (xclip)
- elif [[ -n "$DISPLAY" ]] && command -v xclip >/dev/null; then
-  if [[ "$_input_source" == "file" ]]; then
-   xclip -selection clipboard -i "$file"
-  else
-   cat | xclip -selection clipboard
-  fi
-
- # 5. X11 (xsel fallback)
- elif [[ -n "$DISPLAY" ]] && command -v xsel >/dev/null; then
-  if [[ "$_input_source" == "file" ]]; then
-   xsel --clipboard --input <"$file"
-  else
-   cat | xsel --clipboard --input
-  fi
-
- else
-  echo -e " ${R}(!)${NC} Could not detect a valid clipboard utility or display session."
-  echo -e "       Debug: WAYLAND_DISPLAY='$WAYLAND_DISPLAY', DISPLAY='$DISPLAY'"
-  return 1
- fi
-
- # --- Success Message ---
- if [[ "$_input_source" == "file" ]]; then
-  echo -e "${M} File ${G}$(basename "$file")${NC}${M} contents copied to system clipboard.${NC}"
- else
-  echo -e "${G} Input copied to system clipboard.${NC}"
- fi
 }
-
-export -f clipboard
 
 fmt() {
  local interactive=false
