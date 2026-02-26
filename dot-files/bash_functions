@@ -559,11 +559,20 @@ pki() {
       cn=$(openssl req -in "$file" -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
     elif grep -q "BEGIN CERTIFICATE" "$file" 2>/dev/null; then
       local count=$(grep -c "BEGIN CERTIFICATE" "$file")
-      type=$([[ $count -gt 1 ]] && echo "CA Bundle ($count)" || echo "Certificate")
-      cn=$(openssl x509 -in "$file" -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
-      issued=$(openssl x509 -in "$file" -noout -dates 2>/dev/null | grep "notBefore" | cut -d= -f2)
-      expiry=$(openssl x509 -in "$file" -noout -dates 2>/dev/null | grep "notAfter" | cut -d= -f2)
-      issuer=$(openssl x509 -in "$file" -noout -issuer -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
+      if [[ $count -gt 1 ]]; then
+        type="CA Bundle ($count)"
+        cn="Multiple Certificates"
+        issued="Multiple"
+        expiry="Multiple"
+        issuer="Multiple"
+        days_left="Multiple"
+      else
+        type="Certificate"
+        cn=$(openssl x509 -in "$file" -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
+        issued=$(openssl x509 -in "$file" -noout -dates 2>/dev/null | grep "notBefore" | cut -d= -f2)
+        expiry=$(openssl x509 -in "$file" -noout -dates 2>/dev/null | grep "notAfter" | cut -d= -f2)
+        issuer=$(openssl x509 -in "$file" -noout -issuer -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
+      fi
     elif grep -q "PRIVATE KEY" "$file" 2>/dev/null; then
       type="Private Key"; color="${R}"; cn="[SECRET]"
       if grep -qE "ENCRYPTED|Proc-Type: 4,ENCRYPTED" "$file"; then protected="${R}Yes (Encrypted)${NC}"; fi
@@ -572,7 +581,7 @@ pki() {
     else return 0; fi
 
     # 2. Date Logic
-    if [[ -n "$expiry" && "$expiry" != "N/A" ]]; then
+    if [[ -n "$expiry" && "$expiry" != "N/A" && "$expiry" != "Multiple" ]]; then
       local exp_s=$(date -d "$expiry" +%s 2>/dev/null)
       if [[ -n "$exp_s" ]]; then
         local now=$(date +%s); local diff=$(( (exp_s - now) / 86400 ))
@@ -592,6 +601,50 @@ pki() {
     [[ "$expiry" != "N/A" ]] && rows+=(" Expires         : $expiry")
     [[ "$days_left" != "N/A" ]] && rows+=(" Remaining       : $days_left")
     rows+=(" File Path       : $abs_path")
+
+    # 3b. Detail individual certs if CA Bundle
+    if [[ "$type" == "CA Bundle "* ]]; then
+      local c=1
+      local cert_buf=""
+      local in_cert=false
+      while IFS= read -r line; do
+        if [[ "$line" == *"BEGIN CERTIFICATE"* ]]; then
+          in_cert=true
+          cert_buf="$line"$'\n'
+        elif [[ "$line" == *"END CERTIFICATE"* ]]; then
+          cert_buf+="$line"$'\n'
+          local sub=$(printf "%s" "$cert_buf" | openssl x509 -noout -subject -nameopt RFC2253 2>/dev/null | sed -E 's/^subject=//; s/.*CN=([^,]*).*/\1/')
+          local iss=$(printf "%s" "$cert_buf" | openssl x509 -noout -issuer -nameopt RFC2253 2>/dev/null | sed -E 's/^issuer=//; s/.*CN=([^,]*).*/\1/')
+          local notBefore=$(printf "%s" "$cert_buf" | openssl x509 -noout -dates 2>/dev/null | grep "notBefore" | cut -d= -f2)
+          local notAfter=$(printf "%s" "$cert_buf" | openssl x509 -noout -dates 2>/dev/null | grep "notAfter" | cut -d= -f2)
+          local d_left="N/A"
+
+          if [[ -n "$notAfter" ]]; then
+            local exp_s=$(date -d "$notAfter" +%s 2>/dev/null)
+            if [[ -n "$exp_s" ]]; then
+              local now=$(date +%s); local diff=$(( (exp_s - now) / 86400 ))
+              if [[ $diff -lt 0 ]]; then d_left="${R}EXPIRED (${diff#-} days ago)${NC}"
+              elif [[ $diff -lt 30 ]]; then d_left="${Y}$diff days (URGENT)${NC}"
+              else d_left="${G}$diff days${NC}"; fi
+            fi
+          fi
+
+          rows+=(" --------------------------------------------------")
+          rows+=(" [Entry $c]")
+          rows+=("   Subject       : ${sub:-N/A}")
+          rows+=("   Issuer        : ${iss:-N/A}")
+          rows+=("   Issued        : ${notBefore:-N/A}")
+          rows+=("   Expires       : ${notAfter:-N/A}")
+          rows+=("   Remaining     : ${d_left:-N/A}")
+
+          ((c++))
+          in_cert=false
+          cert_buf=""
+        elif $in_cert; then
+          cert_buf+="$line"$'\n'
+        fi
+      done < "$file"
+    fi
 
     # 4. Calculate Box Width
     local max_w=50
