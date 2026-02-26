@@ -528,3 +528,108 @@ function list-fonts {
  done
 }
 export -f list-fonts
+
+pki() {
+ # 1. Setup & Multi-target handling
+ if [[ -z "$1" ]]; then
+  echo -e " ${Y}(i)${NC} Usage: ${G}pki${NC} <file1> <dir1> ..."
+  return 1
+ fi
+
+ local targets=("$@")
+ local files=()
+
+ # Collect all files if directories are passed
+ for target in "${targets[@]}"; do
+  if [[ -d "$target" ]]; then
+   while IFS= read -r line; do files+=("$line"); done < <(find "$target" -type f \( -name "*.crt" -o -name "*.pem" -o -name "*.key" -o -name "*.p12" -o -name "*.pfx" -o -name "*.csr" \))
+  elif [[ -f "$target" ]]; then
+   files+=("$target")
+  else
+   echo -e " ${R}(!)${NC} Skipping: $target (Not a file or directory)"
+  fi
+ done
+
+ if [[ ${#files[@]} -eq 0 ]]; then
+  echo -e " ${R}(!)${NC} No valid PKI files found."
+  return 1
+ fi
+
+ # 2. Iterative Processing
+ for file in "${files[@]}"; do
+  local type="Unknown"
+  local cn="N/A"
+  local issued="N/A"
+  local expiry="N/A"
+  local days_left="N/A"
+  local issuer="N/A"
+  local header_color="${B}"
+
+  # Determine Type by content sniffing
+  if grep -q "BEGIN PKCS12" "$file" || [[ "$file" == *.p12 ]] || [[ "$file" == *.pfx ]]; then
+   type="P12/PFX Container"
+   # Attempt silent read, if fail, it will prompt for password
+   cn=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
+   [[ -z "$cn" ]] && cn="(Password Protected)"
+   issued=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -dates 2>/dev/null | grep "notBefore" | cut -d= -f2)
+   expiry=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -dates 2>/dev/null | grep "notAfter" | cut -d= -f2)
+   issuer=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -issuer -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
+
+  elif grep -q "BEGIN CERTIFICATE" "$file"; then
+   local cert_count=$(grep -c "BEGIN CERTIFICATE" "$file")
+   if [[ $cert_count -gt 1 ]]; then
+    type="CA Bundle ($cert_count certs)"
+    header_color="${M}" # Muted color for bundles
+   else
+    type="Public Certificate"
+   fi
+   cn=$(openssl x509 -in "$file" -noout -subject -nameopt RFC2253 | sed 's/.*CN=\([^,]*\).*/\1/')
+   issued=$(openssl x509 -in "$file" -noout -dates | grep "notBefore" | cut -d= -f2)
+   expiry=$(openssl x509 -in "$file" -noout -dates | grep "notAfter" | cut -d= -f2)
+   issuer=$(openssl x509 -in "$file" -noout -issuer -nameopt RFC2253 | sed 's/.*CN=\([^,]*\).*/\1/')
+
+  elif grep -q "BEGIN RSA PRIVATE KEY\|BEGIN PRIVATE KEY" "$file"; then
+   type="Private Key"
+   header_color="${R}" # Red alert for private keys
+   cn="[SECRET]"
+
+  elif grep -q "BEGIN PUBLIC KEY" "$file"; then
+   type="Public Key"
+   header_color="${G}"
+
+  elif grep -q "BEGIN CERTIFICATE REQUEST" "$file"; then
+   type="CSR (Signing Request)"
+   cn=$(openssl req -in "$file" -noout -subject -nameopt RFC2253 | sed 's/.*CN=\([^,]*\).*/\1/')
+  fi
+
+  # 3. Expiry Calculation
+  if [[ -n "$expiry" && "$expiry" != "N/A" ]]; then
+   local expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null)
+   if [[ -n "$expiry_epoch" ]]; then
+    local now_epoch=$(date +%s)
+    local diff=$((expiry_epoch - now_epoch))
+    local days=$((diff / 86400))
+
+    if [[ $days -lt 0 ]]; then
+     days_left="${R}EXPIRED (${days#-} days ago)${NC}"
+    elif [[ $days -lt 30 ]]; then
+     days_left="${Y}$days days (URGENT)${NC}"
+    else
+     days_left="${G}$days days${NC}"
+    fi
+   fi
+  fi
+
+  # 4. Elegant Output
+  echo -e "${header_color}┌──────────────────────────────────────────────────┐${NC}"
+  printf "${header_color}│${NC} %-48s ${header_color}│${NC}\n" "FILE: $(basename "$file")"
+  echo -e "${header_color}├──────────────────────────────────────────────────┤${NC}"
+  printf " ${G}%-15s${NC} : %s\n" "Type" "$type"
+  printf " ${G}%-15s${NC} : %s\n" "Common Name" "${cn:-Unknown}"
+  [[ "$issuer" != "N/A" ]] && printf " ${G}%-15s${NC} : %s\n" "Issuer" "$issuer"
+  [[ "$issued" != "N/A" ]] && printf " ${G}%-15s${NC} : %s\n" "Issued" "$issued"
+  [[ "$expiry" != "N/A" ]] && printf " ${G}%-15s${NC} : %s\n" "Expires" "$expiry"
+  [[ "$days_left" != "N/A" ]] && printf " ${G}%-15s${NC} : %s\n" "Remaining" "$days_left"
+  echo -e "${header_color}└──────────────────────────────────────────────────┘${NC}\n"
+ done
+}
