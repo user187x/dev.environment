@@ -14,21 +14,25 @@ readonly FONT_DIR="$HOME/.local/share/fonts"
 readonly TMUX_CONFIG_DIR="$HOME/.config/tmux"
 
 # Colors for logging
-readonly C_RESET='\e[0m'
-readonly C_GREEN='\e[32m'
-readonly C_BLUE='\e[34m'
-readonly C_YELLOW='\e[33m'
-readonly C_RED='\e[31m'
+readonly END='\e[0m'
+readonly GREEN='\e[32m'
+readonly BLUE='\e[34m'
+readonly PURPLE='\e[35m'
+readonly YELLOW='\e[33m'
+readonly RED='\e[31m'
+readonly GRAY='\e[90m'
+readonly WHITE='\e[97m'
+readonly BRIGHT_YELLOW='\e[93m'
 
 # ==========================================
 # Utility Functions
 # ==========================================
 
-log_info() { echo -e "${C_BLUE}[INFO]${C_RESET} $1"; }
-log_success() { echo -e "${C_GREEN}[OK]${C_RESET}   $1"; }
-log_warn() { echo -e "${C_YELLOW}[WARN]${C_RESET} $1"; }
+log_info() { echo -e "${WHITE}[INFO]${END} $1"; }
+log_success() { echo -e "${GREEN}[OK]${END}   $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${END} $1"; }
 log_error() {
- echo -e "${C_RED}[ERR]${C_RESET}  $1"
+ echo -e "${RED}[ERR]${END}  $1"
  exit 1
 }
 
@@ -48,7 +52,7 @@ link_resource() {
  fi
 
  ln -s "$src" "$dest"
- log_success "Linked: $dest -> $src"
+ log_success "${WHITE}Linked${END}: ${BLUE}$dest${END} -> ${GREEN}$src${END}"
 }
 
 # ==========================================
@@ -68,7 +72,7 @@ check_dependencies() {
  done
 
  if [[ ${#missing_deps[@]} -gt 0 ]]; then
-  log_warn "Installing missing dependencies: ${missing_deps[*]}"
+  log_warn "Installing missing dependencies: ${RED}${missing_deps[*]}${END}"
   sudo apt update && sudo apt install -y "${missing_deps[@]}"
  else
   log_success "All dependencies satisfied."
@@ -76,6 +80,7 @@ check_dependencies() {
 }
 
 install_fonts() {
+
  log_info "Installing fonts..."
 
  # Ensure destination directory exists
@@ -94,6 +99,7 @@ install_fonts() {
 }
 
 install_media() {
+
  log_info "Installing media resources..."
 
  local dest="/opt/audio"
@@ -106,15 +112,17 @@ install_media() {
  # Copy content and fix permissions
  sudo cp -rfT "$DEV_HOME/audio" "$dest"
  sudo chown -R "$USER:$USER" "$dest"
- log_success "Audio resources installed to $dest"
+ log_success "Audio resources installed to ${GREEN}$dest${END}"
 }
 
 setup_vim() {
+
  log_info "Configuring Vim..."
  link_resource "$DEV_HOME/vim" "$HOME/.vim"
 }
 
 setup_tmux() {
+
  log_info "Configuring Tmux..."
 
  # Cleanup legacy paths if they exist
@@ -127,7 +135,7 @@ setup_tmux() {
  link_resource "$DEV_HOME/tmux" "$TMUX_CONFIG_DIR"
 
  # Create metadata file
- echo "$TMUX_CONFIG_DIR" >"$TMUX_CONFIG_DIR/tmux.meta"
+ echo "$TMUX_CONFIG_DIR" > "$TMUX_CONFIG_DIR/tmux.meta"
 
  # Initialize TPM (Tmux Plugin Manager)
  # The file tree shows tpm is vendored inside tmux/plugins/tpm
@@ -160,7 +168,7 @@ setup_bash() {
 main() {
 
  echo
- echo -e "${C_YELLOW} Initializing Dev Environment${C_RESET}"
+ echo -e "${GRAY}Initializing Dev Environment${END}"
  echo
 
  # Ensure sudo permissions upfront to prevent timeout later
@@ -188,10 +196,11 @@ main() {
  source "$HOME/.bashrc" || true
 
  echo
- echo -e "${C_YELLOW} Setup Complete!${C_RESET}"
+ echo -e "${GRAY}Setup Complete!${END}"
  echo
 
- exec bash
+ echo -e "${WHITE} ⚠️  Restart Terminal ⚠️  ${END}"
+ echo
 }
 
 # Execute
