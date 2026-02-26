@@ -43,7 +43,7 @@ else
 fi
 alias bat="$batcmd --style=full"
 
-if [[ -f "$SCRIPT_HOME/run" ]];then
+if [[ -f "$SCRIPT_HOME/run" ]]; then
  alias re-source="$SCRIPT_HOME/run"
 fi
 
@@ -55,7 +55,7 @@ if [[ -d "$DEV_ENV_PATH" ]]; then
 else
  if [[ -f "$SCRIPT_HOME/run" ]]; then
   ln -s "$SCRIPT_HOME" "$DEV_ENV_PATH"
- fi 
+ fi
  # Only echo warning if interactive
  if [[ $- == *i* ]]; then
   echo -e "e\[1;93mSetup your dev.environment project to initialize properly: $DEV_ENV_PATH missing\e[0m"

@@ -99,27 +99,69 @@ clipboard() {
 export -f clipboard
 
 fmt() {
- local script="$1"
- if [[ -z "$script" ]]; then
-  echo "Usage : fmt <bash-script>"
-  return 1
- fi
+ local interactive=false
+ local target=""
 
- if [[ ! -f "$script" ]]; then
-  echo "File not found: $script"
-  return 1
- fi
-
- if command -v shfmt >/dev/null; then
-  shfmt -i 1 -w "$script"
-  if [[ "$?" -eq 0 ]]; then
-   echo -e " ${M}(i) Bash Script Formatted:${NC} ${G}$script${NC}"
-  else
-   echo -e " ${R}(!)${NC} Failure formatting script: ${G}$script${NC}"
-  fi
+ # 1. Parse Arguments
+ if [[ "$1" == "-i" ]]; then
+  interactive=true
+  target="$2"
  else
-  echo -e " ${R}(!)${NC} 'shfmt' is not installed."
+  target="$1"
  fi
+
+ # 2. Validation
+ if [[ -z "$target" ]]; then
+  echo -e " Usage : ${G}fmt${NC} [-i] <file|directory>"
+  return 1
+ fi
+
+ if [[ ! -e "$target" ]]; then
+  echo -e " ${R}(!)${NC} Path not found: $target"
+  return 1
+ fi
+
+ if ! command -v shfmt >/dev/null; then
+  echo -e " ${R}(!)${NC} 'shfmt' is not installed."
+  return 1
+ fi
+
+ # 3. Collect Files
+ local files=()
+ if [[ -f "$target" ]]; then
+  files=("$target")
+ else
+  # Use find to grab all files, then filter by mime-type or extension
+  # This avoids the "File not found" error by ensuring we only iterate existing items
+  while IFS= read -r line; do
+   files+=("$line")
+  done < <(find "$target" -type f \( -name "*.sh" -o ! -name "*.*" \))
+ fi
+
+ # 4. Process Files
+ if [[ ${#files[@]} -eq 0 ]]; then
+  echo -e " ${Y}(i)${NC} No shell scripts found in $target"
+  return 0
+ fi
+
+ for file in "${files[@]}"; do
+  # Only process if it's a text file (prevents shfmt from choking on binaries)
+  if file "$file" | grep -qE 'shell script|text'; then
+
+   if [[ "$interactive" == true ]]; then
+    echo -ne " ${Y}?>${NC} Format ${G}$(basename "$file")${NC}? (y/n): "
+    read -r confirm
+    [[ "$confirm" != [yY] ]] && continue
+   fi
+
+   shfmt -i 1 -w "$file"
+   if [[ $? -eq 0 ]]; then
+    echo -e " ${M}(i) Formatted:${NC} ${G}$file${NC}"
+   else
+    echo -e " ${R}(!)${NC} Failure formatting: $file"
+   fi
+  fi
+ done
 }
 
 # Depth of terminal sessions
