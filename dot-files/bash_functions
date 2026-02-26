@@ -529,7 +529,8 @@ function list-fonts {
 }
 export -f list-fonts
 
-pki() {
+pki-details() {
+
  local G='\033[1;92m' R='\033[1;91m' Y='\033[1;93m' B='\033[1;94m' M='\033[3;90m' NC='\033[0m'
  local save_mode=false
 
@@ -729,7 +730,7 @@ pki() {
  _pki_run "$@" | less -R -F -X
 }
 
-pki_analyze() (
+pki-analyze() (
 
  TARGET_DIR="${1:-.}"
 
