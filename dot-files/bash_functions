@@ -530,106 +530,120 @@ function list-fonts {
 export -f list-fonts
 
 pki() {
- # 1. Setup & Multi-target handling
- if [[ -z "$1" ]]; then
-  echo -e " ${Y}(i)${NC} Usage: ${G}pki${NC} <file1> <dir1> ..."
-  return 1
- fi
+  local G='\033[1;92m' R='\033[1;91m' Y='\033[1;93m' B='\033[1;94m' M='\033[3;90m' NC='\033[0m'
+  local save_mode=false
 
- local targets=("$@")
- local files=()
+  # Helper to get visible width (strips ANSI codes)
+  _vwidth() {
+    local str=$1
+    echo -e "$str" | sed 's/\x1b\[[0-9;]*m//g' | wc -c
+  }
 
- # Collect all files if directories are passed
- for target in "${targets[@]}"; do
-  if [[ -d "$target" ]]; then
-   while IFS= read -r line; do files+=("$line"); done < <(find "$target" -type f \( -name "*.crt" -o -name "*.pem" -o -name "*.key" -o -name "*.p12" -o -name "*.pfx" -o -name "*.csr" \))
-  elif [[ -f "$target" ]]; then
-   files+=("$target")
-  else
-   echo -e " ${R}(!)${NC} Skipping: $target (Not a file or directory)"
-  fi
- done
+  _pki_format() {
+    local file="$1"
+    [[ ! -s "$file" ]] && return 0 
 
- if [[ ${#files[@]} -eq 0 ]]; then
-  echo -e " ${R}(!)${NC} No valid PKI files found."
-  return 1
- fi
+    local type="Unknown" cn="N/A" issued="N/A" expiry="N/A" days_left="N/A" issuer="N/A" color="${B}"
+    local protected="${G}No${NC}"
+    local abs_path=$(readlink -f "$file" 2>/dev/null || echo "$file")
+    local filename=$(basename "$file")
 
- # 2. Iterative Processing
- for file in "${files[@]}"; do
-  local type="Unknown"
-  local cn="N/A"
-  local issued="N/A"
-  local expiry="N/A"
-  local days_left="N/A"
-  local issuer="N/A"
-  local header_color="${B}"
+    # 1. Content Detection
+    if grep -q "BEGIN PKCS12" "$file" 2>/dev/null || [[ "$file" == *.p12 ]] || [[ "$file" == *.pfx ]]; then
+      type="P12 Container"; color="${Y}"
+      if ! openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null >/dev/null; then protected="${R}Yes (Encrypted)${NC}"; fi
+      cn=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
+      expiry=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -dates 2>/dev/null | grep "notAfter" | cut -d= -f2)
+    elif grep -q "CERTIFICATE REQUEST" "$file" 2>/dev/null; then
+      type="CSR"; color="${M}"
+      cn=$(openssl req -in "$file" -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
+    elif grep -q "BEGIN CERTIFICATE" "$file" 2>/dev/null; then
+      local count=$(grep -c "BEGIN CERTIFICATE" "$file")
+      type=$([[ $count -gt 1 ]] && echo "CA Bundle ($count)" || echo "Certificate")
+      cn=$(openssl x509 -in "$file" -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
+      issued=$(openssl x509 -in "$file" -noout -dates 2>/dev/null | grep "notBefore" | cut -d= -f2)
+      expiry=$(openssl x509 -in "$file" -noout -dates 2>/dev/null | grep "notAfter" | cut -d= -f2)
+      issuer=$(openssl x509 -in "$file" -noout -issuer -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
+    elif grep -q "PRIVATE KEY" "$file" 2>/dev/null; then
+      type="Private Key"; color="${R}"; cn="[SECRET]"
+      if grep -qE "ENCRYPTED|Proc-Type: 4,ENCRYPTED" "$file"; then protected="${R}Yes (Encrypted)${NC}"; fi
+    elif grep -q "BEGIN PUBLIC KEY" "$file" 2>/dev/null; then
+      type="Public Key"; color="${G}"
+    else return 0; fi
 
-  # Determine Type by content sniffing
-  if grep -q "BEGIN PKCS12" "$file" || [[ "$file" == *.p12 ]] || [[ "$file" == *.pfx ]]; then
-   type="P12/PFX Container"
-   # Attempt silent read, if fail, it will prompt for password
-   cn=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
-   [[ -z "$cn" ]] && cn="(Password Protected)"
-   issued=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -dates 2>/dev/null | grep "notBefore" | cut -d= -f2)
-   expiry=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -dates 2>/dev/null | grep "notAfter" | cut -d= -f2)
-   issuer=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -issuer -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
-
-  elif grep -q "BEGIN CERTIFICATE" "$file"; then
-   local cert_count=$(grep -c "BEGIN CERTIFICATE" "$file")
-   if [[ $cert_count -gt 1 ]]; then
-    type="CA Bundle ($cert_count certs)"
-    header_color="${M}" # Muted color for bundles
-   else
-    type="Public Certificate"
-   fi
-   cn=$(openssl x509 -in "$file" -noout -subject -nameopt RFC2253 | sed 's/.*CN=\([^,]*\).*/\1/')
-   issued=$(openssl x509 -in "$file" -noout -dates | grep "notBefore" | cut -d= -f2)
-   expiry=$(openssl x509 -in "$file" -noout -dates | grep "notAfter" | cut -d= -f2)
-   issuer=$(openssl x509 -in "$file" -noout -issuer -nameopt RFC2253 | sed 's/.*CN=\([^,]*\).*/\1/')
-
-  elif grep -q "BEGIN RSA PRIVATE KEY\|BEGIN PRIVATE KEY" "$file"; then
-   type="Private Key"
-   header_color="${R}" # Red alert for private keys
-   cn="[SECRET]"
-
-  elif grep -q "BEGIN PUBLIC KEY" "$file"; then
-   type="Public Key"
-   header_color="${G}"
-
-  elif grep -q "BEGIN CERTIFICATE REQUEST" "$file"; then
-   type="CSR (Signing Request)"
-   cn=$(openssl req -in "$file" -noout -subject -nameopt RFC2253 | sed 's/.*CN=\([^,]*\).*/\1/')
-  fi
-
-  # 3. Expiry Calculation
-  if [[ -n "$expiry" && "$expiry" != "N/A" ]]; then
-   local expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null)
-   if [[ -n "$expiry_epoch" ]]; then
-    local now_epoch=$(date +%s)
-    local diff=$((expiry_epoch - now_epoch))
-    local days=$((diff / 86400))
-
-    if [[ $days -lt 0 ]]; then
-     days_left="${R}EXPIRED (${days#-} days ago)${NC}"
-    elif [[ $days -lt 30 ]]; then
-     days_left="${Y}$days days (URGENT)${NC}"
-    else
-     days_left="${G}$days days${NC}"
+    # 2. Date Logic
+    if [[ -n "$expiry" && "$expiry" != "N/A" ]]; then
+      local exp_s=$(date -d "$expiry" +%s 2>/dev/null)
+      if [[ -n "$exp_s" ]]; then
+        local now=$(date +%s); local diff=$(( (exp_s - now) / 86400 ))
+        if [[ $diff -lt 0 ]]; then days_left="${R}EXPIRED (${diff#-} days ago)${NC}"
+        elif [[ $diff -lt 30 ]]; then days_left="${Y}$diff days (URGENT)${NC}"
+        else days_left="${G}$diff days${NC}"; fi
+      fi
     fi
-   fi
-  fi
 
-  # 4. Elegant Output
-  echo -e "${header_color}┌──────────────────────────────────────────────────┐${NC}"
-  printf "${header_color}│${NC} %-48s ${header_color}│${NC}\n" "FILE: $(basename "$file")"
-  echo -e "${header_color}├──────────────────────────────────────────────────┤${NC}"
-  printf " ${G}%-15s${NC} : %s\n" "Type" "$type"
-  printf " ${G}%-15s${NC} : %s\n" "Common Name" "${cn:-Unknown}"
-  [[ "$issuer" != "N/A" ]] && printf " ${G}%-15s${NC} : %s\n" "Issuer" "$issuer"
-  [[ "$issued" != "N/A" ]] && printf " ${G}%-15s${NC} : %s\n" "Issued" "$issued"
-  [[ "$expiry" != "N/A" ]] && printf " ${G}%-15s${NC} : %s\n" "Expires" "$expiry"
-  [[ "$days_left" != "N/A" ]] && printf " ${G}%-15s${NC} : %s\n" "Remaining" "$days_left"
-  echo -e "${header_color}└──────────────────────────────────────────────────┘${NC}\n"
- done
+    # 3. Build Content Rows (Store in Array)
+    local rows=()
+    rows+=(" Type            : $type")
+    rows+=(" Protected       : $protected")
+    rows+=(" CN              : ${cn:-N/A}")
+    [[ "$issuer" != "N/A" ]] && rows+=(" Issuer          : $issuer")
+    [[ "$issued" != "N/A" ]] && rows+=(" Issued          : $issued")
+    [[ "$expiry" != "N/A" ]] && rows+=(" Expires         : $expiry")
+    [[ "$days_left" != "N/A" ]] && rows+=(" Remaining       : $days_left")
+    rows+=(" File Path       : $abs_path")
+
+    # 4. Calculate Box Width
+    local max_w=50
+    for r in "${rows[@]}"; do
+      local w=$(_vwidth "$r")
+      [[ $w -gt $max_w ]] && max_w=$w
+    done
+    max_w=$(( max_w + 2 ))
+
+    # 5. Draw
+    local dash=$(printf '─%.0s' $(seq 1 $max_w))
+    printf "${color}┌%s┐${NC}\n" "$dash"
+    
+    # Center Header
+    local h_pad=$(( (max_w - ${#filename}) / 2 ))
+    printf "${color}│${NC}%*s%s%*s${color}│${NC}\n" "$h_pad" "" "$filename" "$(( max_w - h_pad - ${#filename} ))" ""
+    
+    printf "${color}├%s┤${NC}\n" "$dash"
+    
+    # Rows with precise trailing space calculation
+    for r in "${rows[@]}"; do
+      local cur_w=$(_vwidth "$r")
+      local gap=$(( max_w - cur_w ))
+      printf "%b%*s ${color}│${NC}\n" "$r" "$gap" ""
+    done
+    
+    printf "${color}└%s┘${NC}\n\n" "$dash"
+  }
+
+  # --- Argument & Paging Logic ---
+  if [[ "$1" == "-s" || "$1" == "--save" ]]; then save_mode=true; shift; fi
+
+  _pki_run() {
+    case "$1" in
+      "--verify")
+        local f1="$2" f2="$3"
+        local m1=$(openssl x509 -noout -modulus -in "$f1" 2>/dev/null || openssl rsa -noout -modulus -in "$f1" 2>/dev/null || openssl req -noout -modulus -in "$f1" 2>/dev/null)
+        local m2=$(openssl x509 -noout -modulus -in "$f2" 2>/dev/null || openssl rsa -noout -modulus -in "$f2" 2>/dev/null || openssl req -noout -modulus -in "$f2" 2>/dev/null)
+        [[ "$m1" == "$m2" && -n "$m1" ]] && printf "${G}MATCH!${NC}\n" || printf "${R}MISMATCH${NC}\n"
+        ;;
+      *)
+        local tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
+        for arg in "$@"; do
+          if [[ "$arg" =~ ^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$ ]]; then
+            echo | openssl s_client -connect "${arg}:443" -servername "$arg" 2>/dev/null | openssl x509 > "$tmp"
+            [[ -s "$tmp" ]] && _pki_format "$tmp"
+          elif [[ -d "$arg" ]]; then find "$arg" -type f -not -empty | while read f; do _pki_format "$f"; done
+          elif [[ -f "$arg" ]]; then _pki_format "$arg"; fi
+        done
+        ;;
+    esac
+  }
+
+  _pki_run "$@" | less -R -F -X
 }

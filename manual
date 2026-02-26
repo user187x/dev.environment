@@ -172,6 +172,40 @@ function knowledge {
   --explain "<C-n> : Common custom keybinding (Ctrl+n)" \
   --explain "? : Press inside tree for help menu"
 
+  # PKI - Directory Scan
+ _formalize --app "PKI (Directory Scan)" \
+  --synopsis "Analyze all certificates and keys in a directory" \
+  --command "pki ./certs" \
+  --explain "Logic      : Scans for CSRs, Certs, P12s, and Keys" \
+  --explain "Auto-Fit   : Borders dynamically adjust to file path length" \
+  --explain "Color-Code : Blue=Cert, Red=Key, Yellow=P12, Cyan=CSR" [cite: 1, 4, 8]
+
+ # PKI - Remote Cert
+ _formalize --app "PKI (Remote)" \
+  --synopsis "Fetch and analyze a live site certificate" \
+  --command "pki google.com" \
+  --explain "Flow      : Connects via s_client and pipes to analyzer" \
+  --explain "-s / --save : Use flag to download the remote cert locally" [cite: 1, 2, 4]
+
+ # PKI - Verification
+ _formalize --app "PKI (Verify)" \
+  --synopsis "Check if a Private Key matches a Certificate" \
+  --command "pki --verify server.key server.crt" \
+  --explain "Logic      : Compares the modulus of both files" \
+  --explain "Outputs    : Prints 'MATCH!' or 'MISMATCH'" [cite: 1, 2, 8]
+
+ # PKI - Search & Match
+ _formalize --app "PKI (Find Match)" \
+  --synopsis "Find which key in a folder matches a specific cert" \
+  --command "pki --find-match server.crt ./keys" \
+  --explain "Mechanism : Iterates through folder to find matching modulus" [cite: 1, 2]
+
+ # PKI - Chain Check
+ _formalize --app "PKI (Chain)" \
+  --synopsis "Verify the certificate chain for a host" \
+  --command "pki --chain rancher.xxx" \
+  --explain "Display   : Shows full chain depth and Issuer/Subject paths" [cite: 1, 2, 4]
+
 }
 
 # execute the function while retaining color
