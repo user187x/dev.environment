@@ -543,7 +543,7 @@ pki() {
     local file="$1"
     [[ ! -s "$file" ]] && return 0 
 
-    local type="Unknown" cn="N/A" issued="N/A" expiry="N/A" days_left="N/A" issuer="N/A" color="${B}"
+    local type="Unknown" cn="N/A" issued="N/A" expiry="N/A" days_left="N/A" issuer="N/A" sha256="N/A" md5="N/A" color="${B}"
     local protected="${G}No${NC}"
     local abs_path=$(readlink -f "$file" 2>/dev/null || echo "$file")
     local filename=$(basename "$file")
@@ -554,6 +554,8 @@ pki() {
       if ! openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null >/dev/null; then protected="${R}Yes (Encrypted)${NC}"; fi
       cn=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
       expiry=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -dates 2>/dev/null | grep "notAfter" | cut -d= -f2)
+      sha256=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)
+      md5=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -fingerprint -md5 2>/dev/null | cut -d= -f2)
     elif grep -q "CERTIFICATE REQUEST" "$file" 2>/dev/null; then
       type="CSR"; color="${M}"
       cn=$(openssl req -in "$file" -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
@@ -566,12 +568,16 @@ pki() {
         expiry="Multiple"
         issuer="Multiple"
         days_left="Multiple"
+        sha256="Multiple"
+        md5="Multiple"
       else
         type="Certificate"
         cn=$(openssl x509 -in "$file" -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
         issued=$(openssl x509 -in "$file" -noout -dates 2>/dev/null | grep "notBefore" | cut -d= -f2)
         expiry=$(openssl x509 -in "$file" -noout -dates 2>/dev/null | grep "notAfter" | cut -d= -f2)
         issuer=$(openssl x509 -in "$file" -noout -issuer -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
+        sha256=$(openssl x509 -in "$file" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)
+        md5=$(openssl x509 -in "$file" -noout -fingerprint -md5 2>/dev/null | cut -d= -f2)
       fi
     elif grep -q "PRIVATE KEY" "$file" 2>/dev/null; then
       type="Private Key"; color="${R}"; cn="[SECRET]"
@@ -600,6 +606,8 @@ pki() {
     [[ "$issued" != "N/A" ]] && rows+=(" Issued          : $issued")
     [[ "$expiry" != "N/A" ]] && rows+=(" Expires         : $expiry")
     [[ "$days_left" != "N/A" ]] && rows+=(" Remaining       : $days_left")
+    [[ "$sha256" != "N/A" ]] && rows+=(" SHA256          : $sha256")
+    [[ "$md5" != "N/A" ]] && rows+=(" MD5             : $md5")
     rows+=(" File Path       : $abs_path")
 
     # 3b. Detail individual certs if CA Bundle
@@ -617,6 +625,8 @@ pki() {
           local iss=$(printf "%s" "$cert_buf" | openssl x509 -noout -issuer -nameopt RFC2253 2>/dev/null | sed -E 's/^issuer=//; s/.*CN=([^,]*).*/\1/')
           local notBefore=$(printf "%s" "$cert_buf" | openssl x509 -noout -dates 2>/dev/null | grep "notBefore" | cut -d= -f2)
           local notAfter=$(printf "%s" "$cert_buf" | openssl x509 -noout -dates 2>/dev/null | grep "notAfter" | cut -d= -f2)
+          local sha256_fp=$(printf "%s" "$cert_buf" | openssl x509 -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)
+          local md5_fp=$(printf "%s" "$cert_buf" | openssl x509 -noout -fingerprint -md5 2>/dev/null | cut -d= -f2)
           local d_left="N/A"
 
           if [[ -n "$notAfter" ]]; then
@@ -636,6 +646,8 @@ pki() {
           rows+=("   Issued        : ${notBefore:-N/A}")
           rows+=("   Expires       : ${notAfter:-N/A}")
           rows+=("   Remaining     : ${d_left:-N/A}")
+          rows+=("   SHA256        : ${sha256_fp:-N/A}")
+          rows+=("   MD5           : ${md5_fp:-N/A}")
 
           ((c++))
           in_cert=false
