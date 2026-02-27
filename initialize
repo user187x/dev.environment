@@ -71,14 +71,15 @@ install_media() {
  echo
  echo -e "${WHITE}Installing media resources...${END}"
 
- local dest="$HOME/.local/share/audio"
- mkdir -p "$dest"
+ local SRC="$DEV_HOME/media/audio"
+ local DST="$HOME/.local/share/audio"
+ mkdir -p "$DST"
 
  # Copy content and fix permissions
- sudo cp -rfT "$DEV_HOME/media/audio" "$dest"
- sudo chown -R "$USER:$USER" "$dest"
+ sudo cp -rfT "$SRC" "$DST"
+ sudo chown -R "$USER:$USER" "$DST"
  
- echo -e "Audio resources installed to ${GREEN}$dest${END}"
+ echo -e "Audio resources installed to ${GREEN}$DST${END}"
 }
 
 setup_tmux() {

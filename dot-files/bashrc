@@ -9,7 +9,7 @@ case $- in
 esac
 
 # Set system config location
-echo $XDG_CONFIG_HOME="$HOME/.config"
+export XDG_CONFIG_HOME="$HOME/.config"
 
 # Set default file editor
 export EDITOR=vim
@@ -144,8 +144,8 @@ function terminal_soundFx {
  fi
 
  declare -A actions
- actions["open"]="$HOME/.local/audio/info.mp3"
- actions["close"]="$HOME/.local/audio/MegamanTeleport.wav"
+ actions["open"]="$HOME/.local/share/audio/info.mp3"
+ actions["close"]="$HOME/.local/share/audio/MegamanTeleport.wav"
 
  # 3. Check if the action exists in the map
  if [[ -z "${actions[$action]}" ]]; then
