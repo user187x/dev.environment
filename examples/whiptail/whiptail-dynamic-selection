@@ -1,0 +1,69 @@
+#!/bin/bash
+
+# ==============================================================================
+# Dynamic Whiptail Menus
+# Simulates dependent dropdowns by using sequential screens and Bash arrays.
+# ==============================================================================
+
+# 1. Show the first dialog (The Parent Selection)
+PROVIDER=$(whiptail --title "Step 1: Cloud Provider" \
+ --menu "Select your target deployment environment:" \
+ 15 60 3 \
+ "AWS" "Amazon Web Services" \
+ "GCP" "Google Cloud Platform" \
+ "Azure" "Microsoft Azure" \
+ 3>&1 1>&2 2>&3)
+
+# Exit if the user hits Cancel or ESC
+if [ $? -ne 0 ]; then
+ echo "Operation canceled by user."
+ exit 1
+fi
+
+# 2. Dynamically build the options for the second menu based on the first choice
+# We use a Bash array so we can pass it cleanly into the next whiptail command.
+declare -a SERVICE_OPTIONS
+
+case $PROVIDER in
+"AWS")
+ SERVICE_OPTIONS=(
+  "EC2" "Virtual Servers"
+  "S3" "Object Storage"
+  "RDS" "Relational Databases"
+ )
+ ;;
+"GCP")
+ SERVICE_OPTIONS=(
+  "GCE" "Compute Engine"
+  "GCS" "Cloud Storage"
+  "Spanner" "Global Relational Database"
+ )
+ ;;
+"Azure")
+ SERVICE_OPTIONS=(
+  "VMs" "Virtual Machines"
+  "Blob" "Blob Storage"
+  "CosmosDB" "Global NoSQL Database"
+ )
+ ;;
+esac
+
+# 3. Show the second dialog (The Dependent Selection)
+# Notice how we pass "${SERVICE_OPTIONS[@]}" into the command. This expands the array
+# exactly as whiptail expects: "Tag1" "Desc1" "Tag2" "Desc2"
+SERVICE=$(whiptail --title "Step 2: $PROVIDER Services" \
+ --menu "Choose a specific $PROVIDER service to provision:" \
+ 15 65 4 \
+ "${SERVICE_OPTIONS[@]}" \
+ 3>&1 1>&2 2>&3)
+
+# Exit if canceled at the second step
+if [ $? -ne 0 ]; then
+ echo "Operation canceled at step 2."
+ exit 1
+fi
+
+# 4. Output the final combined result
+whiptail --title "Configuration Complete" \
+ --msgbox "You have successfully configured the deployment.\n\nProvider: $PROVIDER\nService:  $SERVICE" \
+ 10 50

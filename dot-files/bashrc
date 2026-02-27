@@ -8,17 +8,28 @@ case $- in
  ;;
 esac
 
-# Set VIM as editor
+# Set system config location
+echo $XDG_CONFIG_HOME="$HOME/.config"
+
+# Set default file editor
 export EDITOR=vim
-export VISUAL=vim
+
+# Set default file viewr
+export VISUAL=bat
+
+# Set K9s NodeShell Active
+export K9S_FEATURE_GATE_NODE_SHELL=true
+
+# Set k9s Plugin Directory
+export K9S_CONFIG_DIR="$HOME/.config/k9s"
 
 # Bash history control
 HISTCONTROL=ignoreboth
-HISTSIZE=100000000
+HISTSIZE=10000
 
 # Don't create a less history file
-export LESSHISTFILE="$HOME/.config/.less_history"
-export HISTFILE="$HOME/.config/.bash_history"
+export LESSHISTFILE="$XDG_CONFIG_HOME/.less_history"
+export HISTFILE="$XDG_CONFIG_HOME/.bash_history"
 
 # Change fzy search to select multiple with spacebar
 export FZF_DEFAULT_OPTS="--bind 'space:toggle-in'"
@@ -54,32 +65,28 @@ source ~/.bash_completions
 #           TERMINAL FUNCTIONS             #
 ############################################
 
-_RED="\[\e[38;5;196m\]"
-_GREEN="\[\e[38;5;84m\]"
-_YELLOW="\[\e[0;33m\]"
-_BLUE="\[\e[0;34m\]"
-_MAGENTA="\[\e[0;35m\]"
-_CYAN="\[\e[0;36m\]"
-_NC="\[\e[0m\]"
-_PALETTE=("$_RED" "$_YELLOW" "$_GREEN" "$_CYAN" "$_BLUE" "$_MAGENTA")
+RED="\[\e[38;5;196m\]"
+GREEN="\[\e[38;5;84m\]"
+BRIGHT_GREEN="\[\e[38;5;216m\]"
+YELLOW="\[\e[0;33m\]"
+BLUE="\[\e[0;34m\]"
+MAGENTA="\[\e[0;35m\]"
+CYAN="\[\e[0;36m\]"
+END="\[\e[0m\]"
 
 update_prompt_string() {
 
  local EXIT_CODE=$?
- local idx=$(($(date +%-S) % ${#_PALETTE[@]}))
-
- # Note: The random color logic is applied to the prompt symbol,
- # but distinct Green/Red is used for success/fail.
 
  if [[ "$EXIT_CODE" -eq 0 ]]; then
-  PS1="${_GREEN} ➤  ${_NC}"
+  PS1="${GREEN} ➤  ${END}"
  else
-  PS1="${_RED} ➤💥  ${_NC}"
+  PS1="${RED} ➤💥  ${END}"
  fi
 }
 
 # Bash terminal prompt session
-export PS1='\[\e[38;5;216m\] ➤  \[\e[0m\]'
+export PS1='${BRIGHT_GREEN} ➤  ${END}'
 
 # Execute the dynamic prompt update (Function defined in bashrc_functions)
 export PROMPT_COMMAND=update_prompt_string
@@ -132,17 +139,17 @@ function terminal_soundFx {
 
  # Check if argument count is 0
  if [[ "$#" -eq 0 && -n "$PS1" ]]; then
-  echo -e "\e[90m(!) SoundFx: No action specified\e[0m"
+  echo -e "${GRAY}(!) SoundFx: No action specified${END}"
   return 1
  fi
 
  declare -A actions
- actions["open"]="/opt/audio/info.mp3"
- actions["close"]="/opt/audio/MegamanTeleport.wav"
+ actions["open"]="$HOME/.local/audio/info.mp3"
+ actions["close"]="$HOME/.local/audio/MegamanTeleport.wav"
 
  # 3. Check if the action exists in the map
  if [[ -z "${actions[$action]}" ]]; then
-  echo -e "\e[90m(!) SoundFx: Action Unknown '$action'\e[0m"
+  echo -e "${GRAY}(!) SoundFx: Action Unknown '$action'${END}"
   return 1
  fi
 

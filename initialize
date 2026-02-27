@@ -9,7 +9,7 @@ set -euo pipefail
 
 # Global Constants
 readonly DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly BACKUP_DIR="$HOME/.dotfiles_backup/$(date +%Y%m%d_%H%M%S)"
+
 readonly FONT_DIR="$HOME/.local/share/fonts"
 readonly TMUX_CONFIG_DIR="$HOME/.config/tmux"
 
@@ -28,105 +28,65 @@ readonly BRIGHT_YELLOW='\e[93m'
 # Utility Functions
 # ==========================================
 
-log_info() { echo -e "${WHITE}[INFO]${END} $1"; }
-log_success() { echo -e "${GREEN}[OK]${END}   $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${END} $1"; }
-log_error() {
- echo -e "${RED}[ERR]${END}  $1"
- exit 1
-}
-
-# safely links source to dest, backing up existing files if necessary
 link_resource() {
+
  local src="$1"
  local dest="$2"
 
- # Create destination parent directory if it doesn't exist
- local dest_dir
- dest_dir=$(dirname "$dest")
+ local dest_dir=$(dirname "$dest")
  mkdir -p "$dest_dir"
 
- # Remove existing file/symlink/directory
  if [[ -e "$dest" || -L "$dest" ]]; then
   rm -rf "$dest"
  fi
 
  ln -s "$src" "$dest"
- log_success "${WHITE}Linked${END}: ${BLUE}$dest${END} -> ${GREEN}$src${END}"
-}
-
-# ==========================================
-# Core Modules
-# ==========================================
-
-check_dependencies() {
- log_info "Checking system dependencies..."
-
- local deps=("tmux" "tar" "git" "vim" "curl")
- local missing_deps=()
-
- for cmd in "${deps[@]}"; do
-  if ! command -v "$cmd" &>/dev/null; then
-   missing_deps+=("$cmd")
-  fi
- done
-
- if [[ ${#missing_deps[@]} -gt 0 ]]; then
-  log_warn "Installing missing dependencies: ${RED}${missing_deps[*]}${END}"
-  sudo apt update && sudo apt install -y "${missing_deps[@]}"
- else
-  log_success "All dependencies satisfied."
- fi
+ echo -e "${WHITE}Linked${END}: ${BLUE}$dest${END} -> ${GREEN}$src${END}"
 }
 
 install_fonts() {
 
- log_info "Installing fonts..."
+ echo -e "Installing fonts..."
 
  # Ensure destination directory exists
  mkdir -p "$FONT_DIR"
 
- # -a : Archive mode (recursive, preserves permissions/timestamps)
- # -n : No-clobber (do not overwrite an existing file; silently skip it)
- cp -a --update=none "$DEV_HOME/fonts/." "$FONT_DIR/"
+ echo -e "${GRAY}"
+ tar -xvf "$DEV_HOME/fonts.tar" -C "$FONT_DIR"
+ echo -e "${END}"
 
  if command -v fc-cache &>/dev/null; then
   fc-cache -f
-  log_success "Font cache updated."
+  echo -e "${WHITE}Font cache updated.${END}"
  else
-  log_warn "fc-cache not found, skipping font cache update."
+  echo -e "${YELLOW}fc-cache not found, attempting to install...${END}"
+  if sudo apt install fc-cache &> /dev/null; then
+   fc-cache -f
+  fi
  fi
 }
 
 install_media() {
 
- log_info "Installing media resources..."
+ echo
+ echo -e "${WHITE}Installing media resources...${END}"
 
- local dest="/opt/audio"
-
- # Sudo is required for /opt
- if [[ ! -d "$dest" ]]; then
-  sudo mkdir -p "$dest"
- fi
+ local dest="$HOME/.local/share/audio"
+ mkdir -p "$dest"
 
  # Copy content and fix permissions
- sudo cp -rfT "$DEV_HOME/audio" "$dest"
+ sudo cp -rfT "$DEV_HOME/media/audio" "$dest"
  sudo chown -R "$USER:$USER" "$dest"
- log_success "Audio resources installed to ${GREEN}$dest${END}"
-}
-
-setup_vim() {
-
- log_info "Configuring Vim..."
- link_resource "$DEV_HOME/vim" "$HOME/.vim"
+ 
+ echo -e "Audio resources installed to ${GREEN}$dest${END}"
 }
 
 setup_tmux() {
 
- log_info "Configuring Tmux..."
+ echo -e "${GRAY}Configuring Tmux...${END}"
 
- # Cleanup legacy paths if they exist
  local legacy_paths=("$HOME/.tmux" "$HOME/.tmux.conf")
+
  for path in "${legacy_paths[@]}"; do
   [[ -e "$path" || -L "$path" ]] && rm -rf "$path"
  done
@@ -138,20 +98,19 @@ setup_tmux() {
  echo "$TMUX_CONFIG_DIR" > "$TMUX_CONFIG_DIR/tmux.meta"
 
  # Initialize TPM (Tmux Plugin Manager)
- # The file tree shows tpm is vendored inside tmux/plugins/tpm
  local tpm_install_script="$TMUX_CONFIG_DIR/plugins/tpm/bin/install_plugins"
 
  if [[ -x "$tpm_install_script" ]]; then
-  log_info "Running Tmux Plugin Manager installer..."
+  echo -e "Running Tmux Plugin Manager installer..."
   # Running inside a subshell to avoid directory changing side-effects
   ("$tpm_install_script" >/dev/null 2>&1) || log_warn "TPM installer returned non-zero exit code."
  else
-  log_warn "TPM installer not found at $tpm_install_script"
+  echo -e "${YELLOW}TPM installer not found at $tpm_install_script${END}"
  fi
 }
 
 setup_bash() {
- log_info "Configuring Bash..."
+ echo -e "Configuring Bash..."
 
  local dot_files_dir="$DEV_HOME/dot-files"
  local dot_files=("bashrc" "bash_packages" "bash_aliases" "bash_functions" "bash_completions")
@@ -171,28 +130,25 @@ main() {
  echo -e "${GRAY}Initializing Dev Environment${END}"
  echo
 
- # Ensure sudo permissions upfront to prevent timeout later
+ # Ensure sudo permissions upfront to prevent timeout
  sudo -v
 
  # Safety check for running Tmux
  if [[ -n "${TMUX:-}" ]]; then
-  log_error "Terminate Tmux before proceeding"
+  echo -e "${RED}Terminate Tmux before proceeding${END}"
  fi
 
- # 1. System Dependencies
- check_dependencies
-
- # 2. Resources (Fonts/Audio)
  install_fonts
  install_media
 
- # 3. Application Configs
  setup_bash
- setup_vim
+ 
+ echo -e "Configuring Vim..."
+ link_resource "$DEV_HOME/vim" "$HOME/.vim"
+
  setup_tmux
 
- # 4. Finalize
- log_info "Reloading shell configuration..."
+ echo -e "Reloading shell configuration..."
  source "$HOME/.bashrc" || true
 
  echo

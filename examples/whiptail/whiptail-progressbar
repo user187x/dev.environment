@@ -1,0 +1,74 @@
+#!/bin/bash
+
+# Define the custom Gray and Light Blue color scheme
+export NEWT_COLORS='
+root=white,cyan
+window=black,lightgray
+border=cyan,lightgray
+shadow=black,black
+title=cyan,lightgray
+button=black,cyan
+actbutton=white,cyan
+checkbox=black,lightgray
+actcheckbox=white,cyan
+entry=black,lightgray
+label=black,lightgray
+listbox=black,lightgray
+actlistbox=white,cyan
+textbox=black,lightgray
+emptyscale=black,lightgray
+fullscale=white,cyan
+'
+
+# 1. Define the endpoints we want to hit
+ENDPOINTS=(
+ "https://jsonplaceholder.typicode.com/posts/1"
+ "https://jsonplaceholder.typicode.com/comments/1"
+ "https://jsonplaceholder.typicode.com/albums/1"
+ "https://jsonplaceholder.typicode.com/photos/1"
+ "https://jsonplaceholder.typicode.com/todos/1"
+ "https://jsonplaceholder.typicode.com/users/1"
+)
+
+TOTAL_ENDPOINTS=${#ENDPOINTS[@]}
+CURRENT_STEP=0
+
+# 2. Open a subshell to run our tasks. Everything echo'd here goes to whiptail.
+(
+ for URL in "${ENDPOINTS[@]}"; do
+
+  # Calculate the current completion percentage
+  PERCENTAGE=$((CURRENT_STEP * 100 / TOTAL_ENDPOINTS))
+
+  # 3. The "XXX" Trick
+  # Whiptail uses this specific format to update both the text AND the percentage.
+  echo "XXX"
+  echo "$PERCENTAGE"
+  echo "Fetching: $URL\nProgress: $CURRENT_STEP of $TOTAL_ENDPOINTS completed."
+  echo "XXX"
+
+  # 4. Do the actual work
+  # We use -s to keep curl silent so it doesn't break the whiptail UI.
+  # Output is thrown away here, but you would normally pipe it to a file.
+  curl -s "$URL" >/dev/null
+
+  # (Optional) Adding a small sleep just so you can visually see the
+  # progress bar move. Real curl calls might be too fast!
+  sleep 1
+
+  ((CURRENT_STEP++))
+ done
+
+ # 5. Push the bar to exactly 100% when the loop finishes
+ echo "XXX"
+ echo "100"
+ echo "All endpoints fetched successfully!"
+ echo "XXX"
+
+ # Pause for a second so the user can actually see it hit 100% before it closes
+ sleep 1
+
+) | whiptail --title "API Data Fetcher" --gauge "Initializing..." 10 75 0
+
+# 6. Follow up with a completion message
+whiptail --title "Success" --msgbox "Successfully processed all $TOTAL_ENDPOINTS endpoints." 8 50

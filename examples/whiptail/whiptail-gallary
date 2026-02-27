@@ -1,0 +1,171 @@
+#!/bin/bash
+
+# ==============================================================================
+# Whiptail TUI Template Library
+#
+# A collection of portable whiptail examples. Each function is self-contained.
+# Note on the magic `3>&1 1>&2 2>&3`: Whiptail outputs to stderr by default.
+# This swaps stdout and stderr so we can easily capture the output into a variable.
+# ==============================================================================
+
+# 1. Message Box
+# Use this to display simple information or warnings. User must press OK.
+show_msgbox() {
+ whiptail --title "Message Box Example" \
+  --msgbox "This is a simple message box. It pauses the script until the user presses OK. Great for displaying warnings or completion statuses." \
+  10 60
+}
+
+# 2. Yes / No Dialog
+# Use this for boolean choices. Returns an exit status of 0 for Yes, 1 for No.
+show_yesno() {
+ if whiptail --title "Yes/No Example" --yesno "Do you want to proceed with this action?" 10 60; then
+  whiptail --title "Result" --msgbox "You chose: YES (Exit status 0)" 8 40
+ else
+  whiptail --title "Result" --msgbox "You chose: NO (Exit status 1)" 8 40
+ fi
+}
+
+# 3. Input Box
+# Use this to capture text from the user.
+show_inputbox() {
+ # The last string "Default Text" is optional
+ USER_INPUT=$(whiptail --title "Input Box Example" \
+  --inputbox "Please enter your username:" \
+  10 60 "Default_User" \
+  3>&1 1>&2 2>&3)
+
+ # Check if user pressed cancel
+ exitstatus=$?
+ if [ $exitstatus = 0 ]; then
+  whiptail --title "Result" --msgbox "You entered: $USER_INPUT" 8 40
+ else
+  whiptail --title "Result" --msgbox "You canceled." 8 40
+ fi
+}
+
+# 4. Password Box
+# Use this to capture sensitive text (characters are masked as *).
+show_passwordbox() {
+ PASSWORD=$(whiptail --title "Password Box Example" \
+  --passwordbox "Please enter a secure password:" \
+  10 60 \
+  3>&1 1>&2 2>&3)
+
+ exitstatus=$?
+ if [ $exitstatus = 0 ]; then
+  whiptail --title "Result" --msgbox "Password captured successfully! (Length: ${#PASSWORD} chars)" 8 50
+ else
+  whiptail --title "Result" --msgbox "Authentication canceled." 8 40
+ fi
+}
+
+# 5. Menu
+# Use this to let the user select ONE option from a list.
+show_menu() {
+ CHOICE=$(whiptail --title "Menu Example" \
+  --menu "Choose your preferred programming language:" \
+  15 60 4 \
+  "1" "Python" \
+  "2" "Bash" \
+  "3" "Go" \
+  "4" "Rust" \
+  3>&1 1>&2 2>&3)
+
+ exitstatus=$?
+ if [ $exitstatus = 0 ]; then
+  whiptail --title "Result" --msgbox "You selected option: $CHOICE" 8 40
+ fi
+}
+
+# 6. Checklist
+# Use this to let the user select MULTIPLE options using the spacebar.
+show_checklist() {
+ # Syntax: "Tag" "Description" ON/OFF
+ SELECTED=$(whiptail --title "Checklist Example" \
+  --checklist "Select the tools you want to install (Space to toggle):" \
+  15 60 4 \
+  "Docker" "Container runtime" ON \
+  "Git" "Version control" ON \
+  "Node.js" "JavaScript runtime" OFF \
+  "Vim" "Text editor" OFF \
+  3>&1 1>&2 2>&3)
+
+ exitstatus=$?
+ if [ $exitstatus = 0 ]; then
+  # Outputs as a space-separated list of quoted strings: "Docker" "Git"
+  whiptail --title "Result" --msgbox "You selected: $SELECTED" 8 60
+ fi
+}
+
+# 7. Radio List
+# Use this similar to a menu, but with radio buttons (only one can be ON).
+show_radiolist() {
+ # Syntax: "Tag" "Description" ON/OFF (Only ONE should be ON)
+ CHOICE=$(whiptail --title "Radio List Example" \
+  --radiolist "Select your default environment:" \
+  15 60 4 \
+  "DEV" "Development Environment" ON \
+  "STG" "Staging Environment" OFF \
+  "PROD" "Production Environment" OFF \
+  3>&1 1>&2 2>&3)
+
+ exitstatus=$?
+ if [ $exitstatus = 0 ]; then
+  whiptail --title "Result" --msgbox "Environment set to: $CHOICE" 8 40
+ fi
+}
+
+# 8. Gauge (Progress Bar)
+# Use this to show completion of a long-running background task.
+show_gauge() {
+ # We pipe a sequence of numbers (percentages) into the whiptail command.
+ # In a real scenario, you would calculate progress inside a loop or read from a log.
+ (
+  for i in {1..100}; do
+   echo $i
+   sleep 0.02 # Simulating work
+  done
+ ) | whiptail --title "Gauge Example" --gauge "Installing packages... Please wait." 8 60 0
+
+ whiptail --title "Complete" --msgbox "Installation finished!" 8 40
+}
+
+# ==============================================================================
+# Main Execution Loop
+# This uses the menu component to browse all the examples above!
+# ==============================================================================
+
+while true; do
+ ACTION=$(whiptail --title "Whiptail Template Gallery" \
+  --menu "Select a component to test or view (Cancel to exit):" \
+  20 70 8 \
+  "1" "Message Box (--msgbox)" \
+  "2" "Yes/No Box (--yesno)" \
+  "3" "Input Box (--inputbox)" \
+  "4" "Password Box (--passwordbox)" \
+  "5" "Standard Menu (--menu)" \
+  "6" "Checklist (--checklist)" \
+  "7" "Radio List (--radiolist)" \
+  "8" "Progress Gauge (--gauge)" \
+  3>&1 1>&2 2>&3)
+
+ # Exit the loop if the user hits Cancel or ESC
+ if [ $? != 0 ]; then
+  clear
+  echo "Exited Whiptail Gallery."
+  break
+ fi
+
+ # Route the selection to the correct function
+ case $ACTION in
+ "1") show_msgbox ;;
+ "2") show_yesno ;;
+ "3") show_inputbox ;;
+ "4") show_passwordbox ;;
+ "5") show_menu ;;
+ "6") show_checklist ;;
+ "7") show_radiolist ;;
+ "8") show_gauge ;;
+ esac
+done

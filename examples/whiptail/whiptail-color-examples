@@ -1,0 +1,14 @@
+export NEWT_COLORS='
+window=black,lightgray
+border=black,lightgray
+title=black,lightgray
+# --- Button Styling ---
+# Inactive button: Dark background, light text
+button=white,black
+# Active (hovered) button: Bright background, dark text (simulates "lighting up")
+actbutton=black,cyan
+# ----------------------
+textbox=black,lightgray
+'
+
+whiptail --title "Button Test" --msgbox "Notice how the button pops out more against the gray background, and changes dramatically when you hit Tab to select it." 10 60

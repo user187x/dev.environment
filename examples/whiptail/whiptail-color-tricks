@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# ==============================================================================
+# Pure Bash Rainbow Progress Bar
+# Uses standard ANSI escape codes to change the color of the bar as it fills.
+# ==============================================================================
+
+# ANSI Color Codes
+COLORS=(
+    "\e[31m" # Red
+    "\e[33m" # Yellow
+    "\e[32m" # Green
+    "\e[36m" # Cyan
+    "\e[34m" # Blue
+    "\e[35m" # Magenta
+)
+RESET="\e[0m"
+
+# The character used to draw the bar (a solid block)
+BLOCK="█"
+BAR_WIDTH=50
+
+draw_rainbow_bar() {
+    local percent=$1
+    local current_step=$(( percent * BAR_WIDTH / 100 ))
+    local color_index=$(( percent / 17 )) # Divide 100% by the 6 colors
+    
+    # Cap the color index to avoid out-of-bounds errors
+    if [ "$color_index" -ge "${#COLORS[@]}" ]; then
+        color_index=$((${#COLORS[@]} - 1))
+    fi
+
+    local current_color="${COLORS[$color_index]}"
+    
+    # Build the filled portion of the bar
+    local filled=""
+    for ((i=0; i<current_step; i++)); do
+        filled="${filled}${BLOCK}"
+    done
+    
+    # Build the empty portion of the bar
+    local empty=""
+    for ((i=current_step; i<BAR_WIDTH; i++)); do
+        empty="${empty} "
+    done
+    
+    # \r returns the cursor to the start of the line so it overwrites itself
+    printf "\rProgress: [${current_color}${filled}${RESET}${empty}] %3d%%" "$percent"
+}
+
+# --- Simulate Work ---
+echo "Starting rainbow download..."
+
+for i in {1..100}; do
+    draw_rainbow_bar "$i"
+    sleep 0.05 # Simulating work
+done
+
+echo -e "\nDone!"
