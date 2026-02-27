@@ -13,6 +13,7 @@ export XDG_CONFIG_HOME="$HOME/.config"
 
 # Set default file editor
 export EDITOR=vim
+export KUBE_EDITOR=vim
 
 # Set default file viewr
 export VISUAL=bat
