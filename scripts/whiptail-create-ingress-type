@@ -1,0 +1,128 @@
+#!/bin/bash
+
+# Ensure whiptail is installed
+if ! command -v whiptail &> /dev/null; then
+    echo "❌ Error: 'whiptail' could not be found. Please install it."
+    exit 1
+fi
+
+# 1. Get Namespace (Smart fetch)
+if KUBE_NS=$(kubectl get namespaces -o custom-columns=":metadata.name" --no-headers 2>/dev/null); then
+    NS_OPTIONS=()
+    for ns in $KUBE_NS; do
+        NS_OPTIONS+=("$ns" "")
+    done
+
+    NAMESPACE=$(whiptail --menu "☸️  Select the Kubernetes Namespace (Up/Down arrows to choose):" 15 78 8 \
+        "${NS_OPTIONS[@]}" \
+        --title "☸️  Kubernetes Namespace" 3>&1 1>&2 2>&3)
+    [[ $? -ne 0 ]] && exit 0
+else
+    NAMESPACE=$(whiptail --inputbox "⚠️ Could not fetch namespaces. Enter the Kubernetes Namespace manually:" 8 78 "default" \
+        --title "☸️  Kubernetes Namespace" 3>&1 1>&2 2>&3)
+    [[ $? -ne 0 ]] && exit 0
+fi
+
+[[ -z "$NAMESPACE" ]] && NAMESPACE="default"
+
+# 2. Get Ingress Name
+INGRESS_NAME=$(whiptail --inputbox "📛 Enter the Ingress Name:" 8 78 \
+    --title "📛 Ingress Name" 3>&1 1>&2 2>&3)
+[[ $? -ne 0 ]] && exit 0
+if [[ -z "$INGRESS_NAME" ]]; then
+    whiptail --msgbox "❌ Ingress name cannot be empty!" 8 78 --title "Error"
+    exit 1
+fi
+
+# 3. Get Ingress Class (Optional)
+INGRESS_CLASS=$(whiptail --inputbox "🚦 Enter the Ingress Class Name (e.g., 'nginx').\nLeave blank if you want to use the cluster's default:" 8 78 \
+    --title "🚦 Ingress Class" 3>&1 1>&2 2>&3)
+[[ $? -ne 0 ]] && exit 0
+
+# Prepare command array
+declare -a KUBECTL_CMD=(kubectl create ingress "$INGRESS_NAME" -n "$NAMESPACE")
+CMD_STR="kubectl create ingress $INGRESS_NAME -n $NAMESPACE"
+
+if [[ -n "$INGRESS_CLASS" ]]; then
+    KUBECTL_CMD+=("--class=$INGRESS_CLASS")
+    CMD_STR="$CMD_STR --class=$INGRESS_CLASS"
+fi
+
+RULE_COUNT=0
+
+# 4. Loop for Rules
+while true; do
+    whiptail --msgbox "🌐 Let's configure a routing rule.\n\nA rule maps a Host and Path to a Backend Service and Port." 10 78 --title "Route Configuration"
+    
+    # Host
+    ING_HOST=$(whiptail --inputbox "🌍 Enter the Host (e.g., api.example.com).\nLeave blank to match all hosts (wildcard *):" 8 78 \
+        --cancel-button "Cancel Rule" \
+        --title "🌍 Host" 3>&1 1>&2 2>&3)
+    [[ $? -ne 0 ]] && break
+
+    # Path
+    ING_PATH=$(whiptail --inputbox "🛤️  Enter the Path (e.g., / or /api/v1):" 8 78 "/" \
+        --cancel-button "Cancel Rule" \
+        --title "🛤️  Path" 3>&1 1>&2 2>&3)
+    [[ $? -ne 0 ]] && continue
+    [[ -z "$ING_PATH" ]] && ING_PATH="/"
+
+    # Service Name
+    ING_SVC=$(whiptail --inputbox "⚙️  Enter the target Backend Service Name:" 8 78 \
+        --cancel-button "Cancel Rule" \
+        --title "⚙️  Service Name" 3>&1 1>&2 2>&3)
+    [[ $? -ne 0 ]] && continue
+    if [[ -z "$ING_SVC" ]]; then
+        whiptail --msgbox "❌ Service Name cannot be empty!" 8 78 --title "Error"
+        continue
+    fi
+
+    # Service Port
+    ING_PORT=$(whiptail --inputbox "🚪 Enter the target Backend Service Port (e.g., 80 or 8080):" 8 78 \
+        --cancel-button "Cancel Rule" \
+        --title "🚪 Service Port" 3>&1 1>&2 2>&3)
+    [[ $? -ne 0 ]] && continue
+    if [[ -z "$ING_PORT" ]]; then
+        whiptail --msgbox "❌ Port cannot be empty!" 8 78 --title "Error"
+        continue
+    fi
+
+    # TLS Secret (Optional per rule in kubectl create ingress)
+    ING_TLS=$(whiptail --inputbox "🔐 Enter a TLS Secret Name to secure this host.\nLeave blank for no TLS:" 8 78 \
+        --cancel-button "Cancel Rule" \
+        --title "🔐 TLS Configuration" 3>&1 1>&2 2>&3)
+    [[ $? -ne 0 ]] && continue
+
+    # Construct the rule string expected by kubectl: host/path=service:port[,tls=secret]
+    RULE_STR="${ING_HOST}${ING_PATH}=${ING_SVC}:${ING_PORT}"
+    if [[ -n "$ING_TLS" ]]; then
+        RULE_STR="${RULE_STR},tls=${ING_TLS}"
+    fi
+
+    KUBECTL_CMD+=("--rule=$RULE_STR")
+    CMD_STR="$CMD_STR --rule=\"$RULE_STR\""
+    ((RULE_COUNT++))
+
+    # Ask for more rules
+    whiptail --yesno "➕ Rule added! Do you want to add another routing rule?" 8 78 --title "More Rules?" 3>&1 1>&2 2>&3
+    [[ $? -ne 0 ]] && break
+done
+
+# Ensure at least one rule was added
+if [[ $RULE_COUNT -eq 0 ]]; then
+    whiptail --msgbox "⚠️ No rules were added. An Ingress must have at least one rule. Exiting." 8 78 --title "No Rules"
+    exit 1
+fi
+
+# 5. Confirm and Execute
+whiptail --yesno "✅ Ready to execute the following command?\n\n$CMD_STR" 12 78 \
+    --title "✅ Confirm Execution" 3>&1 1>&2 2>&3
+
+if [[ $? -eq 0 ]]; then
+    clear
+    echo "🚀 Executing command..."
+    "${KUBECTL_CMD[@]}"
+else
+    clear
+    echo "🛑 Operation cancelled by user at final confirmation."
+fi
