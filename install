@@ -95,9 +95,6 @@ setup_tmux() {
  # Link the main configuration directory
  link_resource "$DEV_HOME/tmux" "$TMUX_CONFIG_DIR"
 
- # Create metadata file
- echo "$TMUX_CONFIG_DIR" > "$TMUX_CONFIG_DIR/tmux.meta"
-
  # Initialize TPM (Tmux Plugin Manager)
  local tpm_install_script="$TMUX_CONFIG_DIR/plugins/tpm/bin/install_plugins"
 
@@ -111,6 +108,7 @@ setup_tmux() {
 }
 
 setup_bash() {
+
  echo -e "Configuring Bash..."
 
  local dot_files_dir="$DEV_HOME/dot-files"
@@ -155,7 +153,6 @@ main() {
  echo
  echo -e "${GRAY}Setup Complete!${END}"
  echo
-
  echo -e "${WHITE} ⚠️  Restart Terminal ⚠️  ${END}"
  echo
 }
