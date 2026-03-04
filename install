@@ -10,8 +10,13 @@ set -euo pipefail
 # Global Constants
 readonly DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-readonly FONT_DIR="$HOME/.local/share/fonts"
-readonly TMUX_CONFIG_DIR="$HOME/.config/tmux"
+readonly XDG_DATA_HOME="$HOME/.local/share"
+readonly XDG_CONFIG_HOME="$HOME/.config"
+readonly XDG_CACHE_HOME="$HOME/.cache"
+
+readonly FONT_DIR="$XDG_DATA_HOME/fonts"
+readonly TMUX_DIR="$XDG_CONFIG_HOME/tmux"
+readonly AUDIO_DIR="$XDG_DATA_HOME/audio"
 
 # Colors for logging
 readonly END='\e[0m'
@@ -52,7 +57,7 @@ install_fonts() {
  mkdir -p "$FONT_DIR"
 
  echo -e "${GRAY}"
- tar -xvf "$DEV_HOME/fonts.tar" -C "$FONT_DIR"
+ tar -xvf "$DEV_HOME/resources/fonts/fonts.tar" -C "$FONT_DIR"
  echo -e "${END}"
 
  if command -v fc-cache &>/dev/null; then
@@ -66,13 +71,13 @@ install_fonts() {
  fi
 }
 
-install_media() {
+install_resources() {
 
  echo
- echo -e "${WHITE}Installing media resources...${END}"
+ echo -e "${WHITE}Installing resources...${END}"
 
- local SRC="$DEV_HOME/media/audio"
- local DST="$HOME/.local/share/audio"
+ local SRC="$DEV_HOME/resources/media/audio"
+ local DST="$AUDIO_DIR"
  mkdir -p "$DST"
 
  # Copy content and fix permissions
@@ -86,22 +91,16 @@ setup_tmux() {
 
  echo -e "${GRAY}Configuring Tmux...${END}"
 
- local legacy_paths=("$HOME/.tmux" "$HOME/.tmux.conf")
-
- for path in "${legacy_paths[@]}"; do
-  [[ -e "$path" || -L "$path" ]] && rm -rf "$path"
- done
-
  # Link the main configuration directory
- link_resource "$DEV_HOME/tmux" "$TMUX_CONFIG_DIR"
+ link_resource "$DEV_HOME/tmux" "$TMUX_DIR"
 
  # Initialize TPM (Tmux Plugin Manager)
- local tpm_install_script="$TMUX_CONFIG_DIR/plugins/tpm/bin/install_plugins"
+ local TPM_INSTALL_SCRIPT="$TMUX_DIR/plugins/tpm/bin/install_plugins"
 
- if [[ -x "$tpm_install_script" ]]; then
+ if [[ -x "$TPM_INSTALL_SCRIPT" ]]; then
   echo -e "Running Tmux Plugin Manager installer..."
   # Running inside a subshell to avoid directory changing side-effects
-  ("$tpm_install_script" >/dev/null 2>&1) || log_warn "TPM installer returned non-zero exit code."
+  ("$TPM_INSTALL_SCRIPT") || echo "TPM install script failed" && exit 1
  else
   echo -e "${YELLOW}TPM installer not found at $tpm_install_script${END}"
  fi
@@ -138,7 +137,7 @@ main() {
  fi
 
  install_fonts
- install_media
+ install_resources
 
  setup_bash
  
