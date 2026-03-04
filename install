@@ -100,7 +100,7 @@ setup_tmux() {
  if [[ -x "$TPM_INSTALL_SCRIPT" ]]; then
   echo -e "Running Tmux Plugin Manager installer..."
   # Running inside a subshell to avoid directory changing side-effects
-  ("$TPM_INSTALL_SCRIPT") || echo "TPM install script failed" && exit 1
+  ("$TPM_INSTALL_SCRIPT")
  else
   echo -e "${YELLOW}TPM installer not found at $tpm_install_script${END}"
  fi
