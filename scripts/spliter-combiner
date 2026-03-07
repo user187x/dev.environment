@@ -1,0 +1,134 @@
+#!/bin/bash
+
+spliter-combiner() {
+ local OPTIND=1
+ local action=""
+ local num_parts=""
+ local opt
+
+ # Process arguments using getopts
+ while getopts "s:c" opt; do
+  case "$opt" in
+  s)
+   action="split"
+   num_parts="$OPTARG"
+   ;;
+  c)
+   action="combine"
+   ;;
+  \?)
+   echo "Usage: $0 [-s <N> | -c] <target>"
+   exit 1
+   ;;
+  esac
+ done
+
+ # Shift past the parsed options to get the positional target argument
+ shift $((OPTIND - 1))
+ local target="$1"
+
+ # Validate inputs
+ if [[ -z "$action" || -z "$target" ]]; then
+  echo "Usage:"
+  echo "  $0 -s <N> <file>      (Split file into N parts)"
+  echo "  $0 -c <directory>     (Combine parts in directory)"
+  exit 1
+ fi
+
+ if [[ "$action" == "split" ]]; then
+  if [[ ! -f "$target" ]]; then
+   echo "Error: File '$target' does not exist or is not a regular file." [cite: 4]
+   exit 1
+  fi
+
+  if ! [[ "$num_parts" =~ ^[0-9]+$ ]] || ((num_parts < 1)); then
+   echo "Error: -s requires a positive integer (e.g., -s 10)."
+   exit 1
+  fi
+
+  local dir_name="${target}-parts"
+  local base_name="$(basename "$target")"
+
+  mkdir -p "$dir_name"
+
+  echo "Calculating original file checksum..."
+  if command -v pv &>/dev/null; then
+   pv "$target" | sha256sum | awk '{print $1}' [cite: 8] >"$dir_name/.checksum"
+  else
+   sha256sum "$target" | awk '{print $1}' >"$dir_name/.checksum"
+  fi
+
+  echo "Splitting '$target' into $num_parts parts..."
+  split -n "$num_parts" -a 4 -d "$target" "$dir_name/${base_name}.part"
+
+  echo "Success! Your split files and integrity data are in: $dir_name"
+
+ elif [[ "$action" == "combine" ]]; then
+  local clean_target="${target%/}"
+
+  if [[ ! -d "$clean_target" ]]; then
+   echo "Error: Directory '$clean_target' does not exist." [cite: 11]
+   exit 1
+  fi
+
+  local out_file="${clean_target%-parts}"
+
+  if [[ "$clean_target" == "$out_file" ]]; then
+   out_file="${clean_target}_combined" [cite: 13]
+  fi
+
+  if [[ -f "$out_file" ]]; then
+   echo -n "Warning: Output file '$out_file' already exists. Overwrite? (y/n): " [cite: 14]
+   read -r confirm
+   if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+    echo "Aborting."
+    exit 1
+   fi
+  fi
+
+  echo "Combining parts from '$clean_target'..."
+  if command -v pv &>/dev/null; then
+   [cite: 16]
+   pv "$clean_target"/*.part* >"$out_file"
+  else
+   cat "$clean_target"/*.part* [cite: 16] >"$out_file"
+  fi
+
+  if [[ -f "$clean_target/.checksum" ]]; then
+   echo "Verifying file integrity..."
+   local original_hash=$(cat "$clean_target/.checksum") [cite: 17]
+   local new_hash
+
+   if command -v pv &>/dev/null; then
+    new_hash=$(pv "$out_file" | sha256sum | awk '{print $1}') [cite: 18]
+   else
+    new_hash=$(sha256sum "$out_file" | awk '{print $1}') [cite: 18]
+   fi
+
+   if [[ "$original_hash" == "$new_hash" ]]; then
+    [cite: 19]
+    echo "✅ Integrity check PASSED. File is perfectly restored!" [cite: 19]
+    echo "Success! Your combined file is located at: $out_file" [cite: 20]
+
+    echo -n "Would you like to delete the parts directory '$clean_target'? (y/n): "
+    read -r cleanup_confirm
+    if [[ "$cleanup_confirm" == "y" || "$cleanup_confirm" == "Y" ]]; then
+     [cite: 21]
+     rm -rf "$clean_target"
+     echo "🗑️  Parts directory deleted."
+    else
+     echo "📁 Parts directory kept." [cite: 22]
+    fi
+   else
+    echo "❌ Error: Integrity check FAILED! The combined file does not match the original." [cite: 23]
+    exit 1
+   fi
+  else
+   echo "⚠️ Warning: No .checksum file found. Combined successfully, but integrity could not be verified." [cite: 24]
+   echo "Your combined file is located at: $out_file" [cite: 25]
+  fi
+ fi
+}
+
+# This line ensures the function actually runs when you execute the script
+spliter-combiner "$@"

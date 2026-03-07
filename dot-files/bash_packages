@@ -157,6 +157,7 @@ packages=(
  "mpv"
  "duf"
  "fzf"
+ "pv"
  "git"
  "delta:git-delta"
  "thefuck"
