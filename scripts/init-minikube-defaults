@@ -1,0 +1,28 @@
+#!/bin/bash
+
+DRIVER="docker"
+K8_VERSION="stable"
+CPUS="4"
+MEMORY="4096"
+DISK_SIZE="40G"
+
+ADDONS_LIST=( "ingress" "metrics-server" "default-storageclass" "storage-provisioner" )
+ADDONS=$(IFS=,; echo "${ADDONS_LIST[*]}")
+
+minikube config set driver "$DRIVER"
+echo "Setting default driver to $DRIVER"
+
+minikube config set kubernetes-version "$K8_VERSION"
+echo "Setting kubernetes version to $K8_VERSION"
+
+minikube config set cpus "$CPUS"
+echo "Setting CPUs $CPU"
+
+minikube config set memory "$MEMORY"
+echo "Setting Memory $MEMORY"
+
+minikube config set disk-size "$DISK_SIZE"
+echo "Setting Disk-Size $DISK_SIZE"
+
+alias mkstart="minikube start --addons=$ADDONS"
+echo -e "Created Minikube start alias: '\e[92mmkstart\e[0m'"

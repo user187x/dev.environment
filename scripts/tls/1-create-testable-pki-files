@@ -2,7 +2,7 @@
 set -e
 
 AUTO_MODE=0
-DOMAIN="rancher.xxx"
+DOMAIN="test.xxx"
 
 # If not argument passed in
 if [[ "$#" -eq 0 ]];
@@ -24,7 +24,7 @@ then
 fi
 
 # Create an output directory
-OUT_DIR="certs"
+OUT_DIR="$PWD/certs"
 mkdir -p "$OUT_DIR"
 
 cd "$OUT_DIR"

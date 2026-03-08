@@ -1,8 +1,7 @@
 #!/bin/bash
-# Exit immediately if a command exits with a non-zero status.
 set -e
 
-DOMAIN=${1:-"myapp.local"}
+DOMAIN=${1:-"test.xxx"}
 NAMESPACE="dev-platform"
 SAFE_NAME="${DOMAIN//./-}"
 DB_PASSWORD="coder-db-password"
@@ -13,15 +12,15 @@ echo "==================================================="
 
 # 1. Generate PKI and Secrets using your provided scripts
 echo -e "\n[1/6] Generating PKI and injecting K8s Secrets..."
-./1-create-testable-pki-files.sh "$DOMAIN"
-./3-create-testable-k8-pki-secrets.sh <<< "$DOMAIN
+./1-create-testable-pki-files "$DOMAIN"
+./3-create-testable-k8-pki-secrets <<<"$DOMAIN
 $NAMESPACE"
 
 # 2. Update Local Hosts
 echo -e "\n[2/6] Updating Local DNS..."
-./2-create-local-host-dns-entry.sh <<< "coder.$DOMAIN
+./2-create-local-host-dns-entry <<<"coder.$DOMAIN
 127.0.0.1"
-./2-create-local-host-dns-entry.sh <<< "teleport.$DOMAIN
+./2-create-local-host-dns-entry <<<"teleport.$DOMAIN
 127.0.0.1"
 
 # 3. Add Helm Repositories (Removed Bitnami)
@@ -34,10 +33,10 @@ helm repo update
 # 4. Install Traefik for Ingress Routing
 echo -e "\n[4/6] Installing Traefik Ingress Controller..."
 helm upgrade --install traefik traefik/traefik \
-  --namespace="${NAMESPACE}" \
-  --create-namespace \
-  --set providers.kubernetesIngress.publishedService.enabled=true \
-  --wait
+ --namespace="${NAMESPACE}" \
+ --create-namespace \
+ --set providers.kubernetesIngress.publishedService.enabled=true \
+ --wait
 
 # 5. Deploy Official PostgreSQL & Coder
 echo -e "\n[5/6] Deploying Official PostgreSQL & Coder..."
@@ -83,27 +82,29 @@ echo "Waiting for PostgreSQL database to spin up..."
 kubectl rollout status statefulset/coder-db -n "${NAMESPACE}" --timeout=90s
 
 helm upgrade --install coder coder-v2/coder \
-  --namespace "${NAMESPACE}" \
-  --set coder.env.CODER_PG_CONNECTION_URL="postgres://coder:${DB_PASSWORD}@coder-db.${NAMESPACE}.svc.cluster.local:5432/coder?sslmode=disable" \
-  --set coder.env.CODER_ACCESS_URL="https://coder.${DOMAIN}" \
-  --set coder.tls.secretNames[0]="${SAFE_NAME}-wildcard-tls" \
-  --set coder.ingress.enabled=true \
-  --set coder.ingress.className="traefik" \
-  --set coder.ingress.host="coder.${DOMAIN}" \
-  --set coder.ingress.tls.enable=true \
-  --set coder.ingress.tls.secretName="${SAFE_NAME}-wildcard-tls" \
-  --wait
+ --namespace "${NAMESPACE}" \
+ --create-namespace \ 
+ --set coder.env.CODER_PG_CONNECTION_URL="postgres://coder:${DB_PASSWORD}@coder-db.${NAMESPACE}.svc.cluster.local:5432/coder?sslmode=disable" \
+ --set coder.env.CODER_ACCESS_URL="https://coder.${DOMAIN}" \
+ --set coder.tls.secretNames[0]="${SAFE_NAME}-wildcard-tls" \
+ --set coder.ingress.enabled=true \
+ --set coder.ingress.className="traefik" \
+ --set coder.ingress.host="coder.${DOMAIN}" \
+ --set coder.ingress.tls.enable=true \
+ --set coder.ingress.tls.secretName="${SAFE_NAME}-wildcard-tls" \
+ --wait
 
 # 6. Deploy Teleport for /admin Oversight
 echo -e "\n[6/6] Deploying Teleport..."
 helm upgrade --install teleport teleport/teleport-cluster \
-  --namespace "${NAMESPACE}" \
-  --set clusterName="teleport.${DOMAIN}" \
-  --set proxyListenerMode="multiplex" \
-  --set highAvailability.replicaCount=1 \
-  --set highAvailability.tls.existingSecretName="${SAFE_NAME}-wildcard-tls" \
-  --set kubeClusterName="coder-dev-cluster" \
-  --wait
+ --namespace "${NAMESPACE}" \
+ --create-namespace \ 
+ --set clusterName="teleport.${DOMAIN}" \
+ --set proxyListenerMode="multiplex" \
+ --set highAvailability.replicaCount=1 \
+ --set highAvailability.tls.existingSecretName="${SAFE_NAME}-wildcard-tls" \
+ --set kubeClusterName="coder-dev-cluster" \
+ --wait
 
 echo -e "\n==================================================="
 echo " ✅ Platform Deployed Successfully!"
