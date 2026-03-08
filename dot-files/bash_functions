@@ -1,8 +1,8 @@
 #!/bin/bash
 
-if [[ -n "${__BASH_FUNCTIONS__:-}" ]]; then
- return 0
-fi
+#if [[ -n "${__BASH_FUNCTIONS__:-}" ]]; then
+# return 0
+#fi
 
 __BASH_FUNCTIONS__=1
 
@@ -1000,8 +1000,7 @@ function minikube-start {
  minikube config set disk-size "$DISK_SIZE"
  echo "Setting Disk-Size $DISK_SIZE"
 
- alias mkstart="minikube start --addons=$ADDONS"
- echo -e "Created Minikube start alias: '\e[92mmkstart\e[0m'"
+ minikube start --addons="$ADDONS"
 }
 
 export -f minikube-start
@@ -1011,7 +1010,7 @@ function minikube-delete-all {
  local nuke_all=0
 
  if [[ "$1" == "-y" ]]; then
-  echo -e "\e[90m Nuking with Minikube/K8 resources with extreme prejudice"
+  echo -e "\e[90m Nuking Minikube/K8 resources with extreme prejudice \e[1;91m☠\e[0m"
   nuke_all=1
  fi
 
