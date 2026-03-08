@@ -976,29 +976,47 @@ pki-analyze() (
 
 function minikube-start {
 
+ local RED=$'\e[0;31m'    # Red color code
+ local GREEN=$'\e[0;32m'  # Green color code
+ local HIGH_WHITE=$'\e[1;97m'
+ local LIGHT_GRAY=$'\e[0;37m'
+ local NC=$'\e[0m'        # No Color (reset) code
+
  local DRIVER="docker"
  local K8_VERSION="stable"
  local CPUS="4"
  local MEMORY="4096"
  local DISK_SIZE="40G"
 
- local ADDONS_LIST=( "ingress" "metrics-server" "default-storageclass" "storage-provisioner" )
+ local OFFER_LIST=( "ingress" "metrics-server" "default-storageclass" "storage-provisioner" )
+ local ADDON_LIST=()
+
+ for addon in "${OFFER_LIST[@]}"; do
+  read -p "Turn on addon ${GREEN}$addon${NC} ? (y/n) : " answer
+  if [[ "$answer" == "y" ]]; then
+   echo -e " Activating addon ${GREEN}$addon...${NC}"
+   ADDON_LIST=+("$addon")
+  else
+   echo -e " ${LIGHT_GRAY}Skipping addon $addon...${NC}"
+  fi
+ done
+
  local ADDONS=$(IFS=,; echo "${ADDONS_LIST[*]}")
 
  minikube config set driver "$DRIVER"
- echo "Setting default driver to $DRIVER"
+ echo -e "Setting default driver to ${HIGH_WHITE}$DRIVER${NC}"
 
  minikube config set kubernetes-version "$K8_VERSION"
- echo "Setting kubernetes version to $K8_VERSION"
+ echo -e "Setting kubernetes version to ${HIGH_WHTIE}$K8_VERSION${NC}"
 
  minikube config set cpus "$CPUS"
- echo "Setting CPUs $CPU"
+ echo -e "Setting CPUs ${HIGH_WHTIE}$CPUS${NC}"
 
  minikube config set memory "$MEMORY"
- echo "Setting Memory $MEMORY"
+ echo -e "Setting Memory ${HIGH_WHTIE}$MEMORY${NC}"
 
  minikube config set disk-size "$DISK_SIZE"
- echo "Setting Disk-Size $DISK_SIZE"
+ echo -e "Setting Disk-Size ${HIGH_WHTIE}$DISK_SIZE${NC}"
 
  minikube start --addons="$ADDONS"
 }
