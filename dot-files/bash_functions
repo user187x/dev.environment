@@ -973,3 +973,63 @@ pki-analyze() (
  # Re-disable nullglob
  shopt -u nullglob
 )
+
+function minikube-start {
+
+ local DRIVER="docker"
+ local K8_VERSION="stable"
+ local CPUS="4"
+ local MEMORY="4096"
+ local DISK_SIZE="40G"
+
+ local ADDONS_LIST=( "ingress" "metrics-server" "default-storageclass" "storage-provisioner" )
+ local ADDONS=$(IFS=,; echo "${ADDONS_LIST[*]}")
+
+ minikube config set driver "$DRIVER"
+ echo "Setting default driver to $DRIVER"
+
+ minikube config set kubernetes-version "$K8_VERSION"
+ echo "Setting kubernetes version to $K8_VERSION"
+
+ minikube config set cpus "$CPUS"
+ echo "Setting CPUs $CPU"
+
+ minikube config set memory "$MEMORY"
+ echo "Setting Memory $MEMORY"
+
+ minikube config set disk-size "$DISK_SIZE"
+ echo "Setting Disk-Size $DISK_SIZE"
+
+ alias mkstart="minikube start --addons=$ADDONS"
+ echo -e "Created Minikube start alias: '\e[92mmkstart\e[0m'"
+}
+
+export -f minikube-start
+
+function minikube-delete-all {
+ 
+ local nuke_all=0
+
+ if [[ "$1" == "-y" ]]; then
+  echo -e "\e[90m Nuking with Minikube/K8 resources with extreme prejudice"
+  nuke_all=1
+ fi
+
+ minikube delete --all --purge
+
+ if (( nuke_all )); then
+  rm -rf "$HOME/.minikube" > /dev/null 2>&1
+  rm -rf "$HOME/.kube" > /dev/null 2>&1
+ else
+  read -p "Delete ~/.minikube ? (y/n) : " response
+  if [[ "$resposne" == "y" ]]; then
+   rm -rf "$HOME/.minikube" > /dev/null 2>&1
+  fi
+  read -p "Delete ~/.kube ? (y/n) : " response
+  if [[ "$resposne" == "y" ]]; then
+   rm -rf "$HOME/.kube" > /dev/null 2>&1
+  fi
+ fi
+}
+
+export -f minikube-delete-all
