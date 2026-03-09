@@ -9,26 +9,17 @@ terraform {
   }
 }
 
-provider "coder" {
-}
+provider "coder" {}
 
 variable "use_kubeconfig" {
   type        = bool
-  description = <<-EOF
-  Use host kubeconfig? (true/false)
-
-  Set this to false if the Coder host is itself running as a Pod on the same
-  Kubernetes cluster as you are deploying workspaces to.
-
-  Set this to true if the Coder host is running outside the Kubernetes cluster
-  for workspaces.  A valid "~/.kube/config" must be present on the Coder host.
-  EOF
+  description = "Use host kubeconfig? (true/false)"
   default     = false
 }
 
 variable "namespace" {
   type        = string
-  description = "The Kubernetes namespace to create workspaces in (must exist prior to creating workspaces). If the Coder host is itself running as a Pod on the same Kubernetes cluster as you are deploying workspaces to, set this to the same namespace."
+  description = "The Kubernetes namespace to create workspaces in."
 }
 
 data "coder_parameter" "cpu" {
@@ -96,7 +87,6 @@ data "coder_parameter" "home_disk_size" {
 }
 
 provider "kubernetes" {
-  # Authenticate via ~/.kube/config or a Coder-specific ServiceAccount, depending on admin preferences
   config_path = var.use_kubeconfig == true ? "~/.kube/config" : null
 }
 
@@ -106,6 +96,13 @@ data "coder_workspace_owner" "me" {}
 resource "coder_agent" "main" {
   os             = "linux"
   arch           = "amd64"
+
+  # Explicitly disable the default VS Code Desktop button
+  display_apps {
+    vscode          = false
+    vscode_insiders = false
+  }
+
   startup_script = <<-EOT
     set -e
     export DEBIAN_FRONTEND=noninteractive
@@ -135,11 +132,15 @@ resource "coder_agent" "main" {
     vncserver -kill :1 2>/dev/null || true
     vncserver :1 -geometry 1920x1080 -depth 24 -localhost no
 
-    # Install the latest code-server.
-    curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --prefix=/tmp/code-server
-
-    # Start code-server in the background.
-    /tmp/code-server/bin/code-server --auth none --port 13337 >/tmp/code-server.log 2>&1 &
+    # 5. Install and Start Filebrowser
+    if ! command -v filebrowser &> /dev/null; then
+      echo "Installing Filebrowser..."
+      curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
+    fi
+    
+    # Pass the proxied base URL to Filebrowser so it loads static assets properly
+    FB_BASE_URL="/@${data.coder_workspace_owner.me.name}/${data.coder_workspace.me.name}.main/apps/file-browser"
+    filebrowser -r /home/coder -p 13339 -a 0.0.0.0 --noauth --baseurl "$FB_BASE_URL" >/tmp/filebrowser.log 2>&1 &
   EOT
 
   metadata {
@@ -159,18 +160,10 @@ resource "coder_agent" "main" {
   }
 
   metadata {
-    display_name = "Home Disk"
-    key          = "3_home_disk"
-    script       = "coder stat disk --path $${HOME}"
-    interval     = 60
-    timeout      = 1
-  }
-
-metadata {
     display_name = "VNC Port Forwarding Command"
     key          = "8_vnc_command"
     script       = "echo 'coder port-forward ${data.coder_workspace.me.name} 5901:5901'"
-    interval     = 86400 # Just evaluate once a day since it's static text
+    interval     = 86400 
     timeout      = 1
   }
 
@@ -183,18 +176,18 @@ metadata {
   }
 }
 
-# code-server
-resource "coder_app" "code-server" {
+# The Filebrowser App definition
+resource "coder_app" "file-browser" {
   agent_id     = coder_agent.main.id
-  slug         = "code-server"
-  display_name = "code-server"
-  icon         = "/icon/code.svg"
-  url          = "http://localhost:13337?folder=/home/coder"
+  slug         = "file-browser"
+  display_name = "Files"
+  icon         = "/icon/folder.svg"
+  url          = "http://localhost:13339"
   subdomain    = false
   share        = "owner"
 
   healthcheck {
-    url       = "http://localhost:13337/healthz"
+    url       = "http://localhost:13339/"
     interval  = 3
     threshold = 10
   }
@@ -204,19 +197,6 @@ resource "kubernetes_persistent_volume_claim_v1" "home" {
   metadata {
     name      = "coder-${data.coder_workspace.me.id}-home"
     namespace = var.namespace
-    labels = {
-      "app.kubernetes.io/name"     = "coder-pvc"
-      "app.kubernetes.io/instance" = "coder-pvc-${data.coder_workspace.me.id}"
-      "app.kubernetes.io/part-of"  = "coder"
-      "com.coder.resource"         = "true"
-      "com.coder.workspace.id"     = data.coder_workspace.me.id
-      "com.coder.workspace.name"   = data.coder_workspace.me.name
-      "com.coder.user.id"          = data.coder_workspace_owner.me.id
-      "com.coder.user.username"    = data.coder_workspace_owner.me.name
-    }
-    annotations = {
-      "com.coder.user.email" = data.coder_workspace_owner.me.email
-    }
   }
   wait_until_bound = false
   spec {
@@ -238,33 +218,13 @@ resource "kubernetes_deployment_v1" "main" {
   metadata {
     name      = "coder-${data.coder_workspace.me.id}"
     namespace = var.namespace
-    labels = {
-      "app.kubernetes.io/name"     = "coder-workspace"
-      "app.kubernetes.io/instance" = "coder-workspace-${data.coder_workspace.me.id}"
-      "app.kubernetes.io/part-of"  = "coder"
-      "com.coder.resource"         = "true"
-      "com.coder.workspace.id"     = data.coder_workspace.me.id
-      "com.coder.workspace.name"   = data.coder_workspace.me.name
-      "com.coder.user.id"          = data.coder_workspace_owner.me.id
-      "com.coder.user.username"    = data.coder_workspace_owner.me.name
-    }
-    annotations = {
-      "com.coder.user.email" = data.coder_workspace_owner.me.email
-    }
   }
 
   spec {
     replicas = 1
     selector {
       match_labels = {
-        "app.kubernetes.io/name"     = "coder-workspace"
-        "app.kubernetes.io/instance" = "coder-workspace-${data.coder_workspace.me.id}"
-        "app.kubernetes.io/part-of"  = "coder"
-        "com.coder.resource"         = "true"
-        "com.coder.workspace.id"     = data.coder_workspace.me.id
-        "com.coder.workspace.name"   = data.coder_workspace.me.name
-        "com.coder.user.id"          = data.coder_workspace_owner.me.id
-        "com.coder.user.username"    = data.coder_workspace_owner.me.name
+        "app.kubernetes.io/name" = "coder-workspace-${data.coder_workspace.me.id}"
       }
     }
     strategy {
@@ -274,14 +234,7 @@ resource "kubernetes_deployment_v1" "main" {
     template {
       metadata {
         labels = {
-          "app.kubernetes.io/name"     = "coder-workspace"
-          "app.kubernetes.io/instance" = "coder-workspace-${data.coder_workspace.me.id}"
-          "app.kubernetes.io/part-of"  = "coder"
-          "com.coder.resource"         = "true"
-          "com.coder.workspace.id"     = data.coder_workspace.me.id
-          "com.coder.workspace.name"   = data.coder_workspace.me.name
-          "com.coder.user.id"          = data.coder_workspace_owner.me.id
-          "com.coder.user.username"    = data.coder_workspace_owner.me.name
+          "app.kubernetes.io/name" = "coder-workspace-${data.coder_workspace.me.id}"
         }
       }
       spec {
@@ -290,7 +243,7 @@ resource "kubernetes_deployment_v1" "main" {
           image             = "ubuntu:24.04"
           image_pull_policy = "Always"
           
-         # 1. We added 'update-ca-certificates' to register the mounted CA before curl runs
+          # Root CA setup so Coder can connect securely to your coder.xxx domain
           command           = ["sh", "-c", "apt-get update -y && apt-get install -y curl ca-certificates && update-ca-certificates && exec sh -c \"$CODER_INIT_SCRIPT\""]
           working_dir       = "/home/coder"
           
@@ -317,14 +270,13 @@ resource "kubernetes_deployment_v1" "main" {
               "memory" = "${data.coder_parameter.memory.value}Gi"
             }
           }
-
+          
           volume_mount {
             mount_path = "/home/coder"
             name       = "home"
             read_only  = false
           }
 
-          # 2. Mount the CA certificate file into Ubuntu's trusted certificates directory
           volume_mount {
             name       = "ca-cert"
             mount_path = "/usr/local/share/ca-certificates/coder-ca.crt"
@@ -332,7 +284,7 @@ resource "kubernetes_deployment_v1" "main" {
             read_only  = true
           }
         }
-        
+
         volume {
           name = "home"
           persistent_volume_claim {
@@ -341,29 +293,10 @@ resource "kubernetes_deployment_v1" "main" {
           }
         }
 
-          # 3. Pull the CA certificate from the Kubernetes secret created by the install script
         volume {
           name = "ca-cert"
           secret {
             secret_name = "coder-xxx-ca"
-          }
-        }
-
-        affinity {
-          pod_anti_affinity {
-            preferred_during_scheduling_ignored_during_execution {
-              weight = 1
-              pod_affinity_term {
-                topology_key = "kubernetes.io/hostname"
-                label_selector {
-                  match_expressions {
-                    key      = "app.kubernetes.io/name"
-                    operator = "In"
-                    values   = ["coder-workspace"]
-                  }
-                }
-              }
-            }
           }
         }
       }
