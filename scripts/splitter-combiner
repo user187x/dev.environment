@@ -37,7 +37,7 @@ spliter-combiner() {
 
  if [[ "$action" == "split" ]]; then
   if [[ ! -f "$target" ]]; then
-   echo "Error: File '$target' does not exist or is not a regular file." [cite: 4]
+   echo "Error: File '$target' does not exist or is not a regular file." 
    exit 1
   fi
 
@@ -53,7 +53,7 @@ spliter-combiner() {
 
   echo "Calculating original file checksum..."
   if command -v pv &>/dev/null; then
-   pv "$target" | sha256sum | awk '{print $1}' [cite: 8] >"$dir_name/.checksum"
+   pv "$target" | sha256sum | awk '{print $1}'  >"$dir_name/.checksum"
   else
    sha256sum "$target" | awk '{print $1}' >"$dir_name/.checksum"
   fi
@@ -67,18 +67,18 @@ spliter-combiner() {
   local clean_target="${target%/}"
 
   if [[ ! -d "$clean_target" ]]; then
-   echo "Error: Directory '$clean_target' does not exist." [cite: 11]
+   echo "Error: Directory '$clean_target' does not exist." 
    exit 1
   fi
 
   local out_file="${clean_target%-parts}"
 
   if [[ "$clean_target" == "$out_file" ]]; then
-   out_file="${clean_target}_combined" [cite: 13]
+   out_file="${clean_target}_combined" 
   fi
 
   if [[ -f "$out_file" ]]; then
-   echo -n "Warning: Output file '$out_file' already exists. Overwrite? (y/n): " [cite: 14]
+   echo -n "Warning: Output file '$out_file' already exists. Overwrite? (y/n): " 
    read -r confirm
    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
     echo "Aborting."
@@ -88,44 +88,44 @@ spliter-combiner() {
 
   echo "Combining parts from '$clean_target'..."
   if command -v pv &>/dev/null; then
-   [cite: 16]
+   
    pv "$clean_target"/*.part* >"$out_file"
   else
-   cat "$clean_target"/*.part* [cite: 16] >"$out_file"
+   cat "$clean_target"/*.part*  >"$out_file"
   fi
 
   if [[ -f "$clean_target/.checksum" ]]; then
    echo "Verifying file integrity..."
-   local original_hash=$(cat "$clean_target/.checksum") [cite: 17]
+   local original_hash=$(cat "$clean_target/.checksum") 
    local new_hash
 
    if command -v pv &>/dev/null; then
-    new_hash=$(pv "$out_file" | sha256sum | awk '{print $1}') [cite: 18]
+    new_hash=$(pv "$out_file" | sha256sum | awk '{print $1}') 
    else
-    new_hash=$(sha256sum "$out_file" | awk '{print $1}') [cite: 18]
+    new_hash=$(sha256sum "$out_file" | awk '{print $1}') 
    fi
 
    if [[ "$original_hash" == "$new_hash" ]]; then
-    [cite: 19]
-    echo "✅ Integrity check PASSED. File is perfectly restored!" [cite: 19]
-    echo "Success! Your combined file is located at: $out_file" [cite: 20]
+    
+    echo "✅ Integrity check PASSED. File is perfectly restored!" 
+    echo "Success! Your combined file is located at: $out_file" 
 
     echo -n "Would you like to delete the parts directory '$clean_target'? (y/n): "
     read -r cleanup_confirm
     if [[ "$cleanup_confirm" == "y" || "$cleanup_confirm" == "Y" ]]; then
-     [cite: 21]
+     
      rm -rf "$clean_target"
      echo "🗑️  Parts directory deleted."
     else
-     echo "📁 Parts directory kept." [cite: 22]
+     echo "📁 Parts directory kept." 
     fi
    else
-    echo "❌ Error: Integrity check FAILED! The combined file does not match the original." [cite: 23]
+    echo "❌ Error: Integrity check FAILED! The combined file does not match the original." 
     exit 1
    fi
   else
-   echo "⚠️ Warning: No .checksum file found. Combined successfully, but integrity could not be verified." [cite: 24]
-   echo "Your combined file is located at: $out_file" [cite: 25]
+   echo "⚠️ Warning: No .checksum file found. Combined successfully, but integrity could not be verified." 
+   echo "Your combined file is located at: $out_file" 
   fi
  fi
 }
