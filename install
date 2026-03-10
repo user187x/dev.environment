@@ -128,6 +128,14 @@ main() {
  echo -e "${GRAY}Initializing Dev Environment${END}"
  echo
 
+ if [ -z "$DISPLAY" ]; then
+  echo "Running headless"
+ else
+  zenity --question \
+   --title="Confirmation" \
+   --text="Installing environment. Continue?" > /dev/null 2>&1
+ fi
+
  # Ensure sudo permissions upfront to prevent timeout
  sudo -v
 

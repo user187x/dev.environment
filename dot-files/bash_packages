@@ -102,9 +102,6 @@ install_pkg_from_cache() {
 
  echo "[$pkg] Attempting offline install from cache..."
 
- # Find the .deb file.
- # specific logic: Find file starting with pkg name followed by underscore (standard deb naming)
- # We grab the newest file if multiple exist (head -n 1)
  local deb_file
  deb_file=$(find "$PKG_BACKUP_DIR" -maxdepth 1 -name "${pkg}_*.deb" -print | head -n 1)
 
@@ -156,6 +153,8 @@ packages=(
  "mpv"
  "duf"
  "fzf"
+ "zenity"
+ "pipx"
  "git"
  "delta:git-delta"
  "thefuck"
@@ -259,12 +258,19 @@ sudo apt update -y && sudo apt upgrade -y
 echo ""
 echo "--- 🚀 Starting Custom Installations ---"
 
-# (The rest of your custom installation script follows below unchanged)
-# Install ghostty terminal
-if ! command -v ghostty >/dev/null 2>&1; then
- echo "Installing ghostty..."
- sudo apt install curl -y
- curl -fsSL https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh | sh
+if ! command -v terraform >/dev/null 2>&1; then
+
+ echo "Installing terraform & packer"
+ sudo apt install -y gnupg software-properties-common
+
+ curl -fsSL https://apt.releases.hashicorp.com/gpg \
+  | sudo gpg --dearmor \
+  | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+
+ echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
+  | sudo tee /etc/apt/sources.list.d/hashicorp.list
+
+ sudo apt update && sudo apt install terraform packer
 fi
 
 # Install Helm
