@@ -1,0 +1,14 @@
+#!/bin/bash
+
+echo "Building Ubuntu Dev image"
+docker build -t ubuntu-dev:1.0.0 .
+
+echo
+echo "Pushing image to docker"
+
+read -p "Enter Docker login username: " username
+read -p -s "Enter Docker password: " password
+
+docker login --username "$username" --password "$password"
+
+docker push ubuntu-dev:1.0.0

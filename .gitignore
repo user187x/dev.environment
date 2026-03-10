@@ -1,4 +1,5 @@
 package-backup/
+apt-cache/
 certs/
 *.crt
 *.key
