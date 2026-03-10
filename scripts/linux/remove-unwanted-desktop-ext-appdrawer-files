@@ -1,0 +1,57 @@
+#!/bin/bash
+
+DIRECTORIES=(
+ "$HOME/.local/share/applications"
+ "/usr/share/applications"
+ "/usr/local/share/applications"
+ "/var/lib/snapd/desktop/applications"
+)
+
+read -e -r -p "Enter the display name in the app drawer to find: " appName
+results=$(grep -ri "Name=$appName" "${DIRECTORIES[@]}" 2>/dev/null)
+
+# Check if the results string is empty (-z)
+if [[ -z "$results" ]]; then
+ echo "No application found matching: $appName"
+ exit 1 # Exit the script early (use 'return 1' if this is inside a function)
+fi
+
+# We only get here if grep actually found something
+readarray -t entries <<<"$results"
+
+for entry in "${entries[@]}"; do
+ echo -e "\e[92m $entry \e[0m"
+done
+
+read -e -r -p "Is it any of these (y/n): ? " response
+lowered=$(echo "$response" | tr '[:upper:]' '[:lower:]')
+
+if [[ "$lowered" == "y" ]] || [[ "$lowered" == "yes" ]]; then
+ echo "Then remove it yourself with the provided insight above"
+ exit 0
+fi
+
+SELECTED_FILES=$(find "${DIRECTORIES[@]}" -name "*.desktop" 2>/dev/null | fzf --multi --header="Select .desktop files to REMOVE (Tab to multi-select, Enter to confirm)")
+
+if [ -z "$SELECTED_FILES" ]; then
+ echo "No files selected. Exiting."
+ exit 0
+fi
+
+echo "The following files will be deleted:"
+echo "$SELECTED_FILES"
+read -p "Are you sure you want to permanently remove these? (y/N): " CONFIRM
+
+if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+ echo "$SELECTED_FILES" | while read -r FILE; do
+  # Use sudo for system directories
+  if [[ "$FILE" == /usr/* ]] || [[ "$FILE" == /var/* ]]; then
+   sudo rm -v "$FILE"
+  else
+   rm -v "$FILE"
+  fi
+ done
+ echo "Done."
+else
+ echo "Operation cancelled."
+fi

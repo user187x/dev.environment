@@ -1,8 +1,8 @@
 #!/bin/bash
 
-if [[ -n "${__BASH_FUNCTIONS__:-}" ]]; then
- return 0
-fi
+#if [[ -n "${__BASH_FUNCTIONS__:-}" ]]; then
+# return 0
+#fi
 
 __BASH_FUNCTIONS__=1
 
@@ -973,3 +973,210 @@ pki-analyze() (
  # Re-disable nullglob
  shopt -u nullglob
 )
+
+function minikube-start {
+
+ local RED=$'\e[0;31m'    # Red color code
+ local GREEN=$'\e[0;32m'  # Green color code
+ local HIGH_WHITE=$'\e[1;97m'
+ local LIGHT_GRAY=$'\e[0;37m'
+ local NC=$'\e[0m'        # No Color (reset) code
+
+ local DRIVER="docker"
+ local K8_VERSION="stable"
+ local CPUS="4"
+ local MEMORY="4096"
+ local DISK_SIZE="40G"
+
+ local OFFER_LIST=( "ingress" "metrics-server" "default-storageclass" "storage-provisioner" )
+ local ADDON_LIST=()
+
+ for addon in "${OFFER_LIST[@]}"; do
+  read -p "Turn on addon ${GREEN}$addon${NC} ? (y/n) : " answer
+  if [[ "$answer" == "y" ]]; then
+   echo -e " Activating addon ${GREEN}$addon...${NC}"
+   ADDON_LIST+=("$addon")
+  else
+   echo -e " ${LIGHT_GRAY}Skipping addon $addon...${NC}"
+  fi
+ done
+
+ local ADDONS=$(IFS=,; echo "${ADDONS_LIST[*]}")
+
+ minikube config set driver "$DRIVER"
+ echo -e "Setting default driver to ${HIGH_WHITE}$DRIVER${NC}"
+
+ minikube config set kubernetes-version "$K8_VERSION"
+ echo -e "Setting kubernetes version to ${HIGH_WHTIE}$K8_VERSION${NC}"
+
+ minikube config set cpus "$CPUS"
+ echo -e "Setting CPUs ${HIGH_WHTIE}$CPUS${NC}"
+
+ minikube config set memory "$MEMORY"
+ echo -e "Setting Memory ${HIGH_WHTIE}$MEMORY${NC}"
+
+ minikube config set disk-size "$DISK_SIZE"
+ echo -e "Setting Disk-Size ${HIGH_WHTIE}$DISK_SIZE${NC}"
+
+ minikube start --addons="$ADDONS"
+}
+
+export -f minikube-start
+
+function minikube-delete-all {
+ 
+ local nuke_all=0
+
+ if [[ "$1" == "-y" ]]; then
+  echo -e "\e[90m Nuking Minikube/K8 resources with extreme prejudice \e[1;91m☠\e[0m"
+  nuke_all=1
+ fi
+
+ minikube delete --all --purge
+
+ if (( nuke_all )); then
+  rm -rf "$HOME/.minikube" > /dev/null 2>&1
+  rm -rf "$HOME/.kube" > /dev/null 2>&1
+ else
+  read -p "Delete ~/.minikube ? (y/n) : " response
+  if [[ "$resposne" == "y" ]]; then
+   rm -rf "$HOME/.minikube" > /dev/null 2>&1
+  fi
+  read -p "Delete ~/.kube ? (y/n) : " response
+  if [[ "$resposne" == "y" ]]; then
+   rm -rf "$HOME/.kube" > /dev/null 2>&1
+  fi
+ fi
+}
+
+export -f minikube-delete-all
+
+spliter-combiner() {
+ local OPTIND=1
+ local action=""
+ local num_parts=""
+ local opt
+
+ # Process arguments using getopts
+ while getopts "s:c" opt; do
+  case "$opt" in
+  s)
+   action="split"
+   num_parts="$OPTARG"
+   ;;
+  c)
+   action="combine"
+   ;;
+  \?)
+   echo "Usage: $0 [-s <N> | -c] <target>"
+   exit 1
+   ;;
+  esac
+ done
+
+ # Shift past the parsed options to get the positional target argument
+ shift $((OPTIND - 1))
+ local target="$1"
+
+ # Validate inputs
+ if [[ -z "$action" || -z "$target" ]]; then
+  echo "Usage:"
+  echo "  $0 -s <N> <file>      (Split file into N parts)"
+  echo "  $0 -c <directory>     (Combine parts in directory)"
+  exit 1
+ fi
+
+ if [[ "$action" == "split" ]]; then
+  if [[ ! -f "$target" ]]; then
+   echo "Error: File '$target' does not exist or is not a regular file." 
+   exit 1
+  fi
+
+  if ! [[ "$num_parts" =~ ^[0-9]+$ ]] || ((num_parts < 1)); then
+   echo "Error: -s requires a positive integer (e.g., -s 10)."
+   exit 1
+  fi
+
+  local dir_name="${target}-parts"
+  local base_name="$(basename "$target")"
+
+  mkdir -p "$dir_name"
+
+  echo "Calculating original file checksum..."
+  if command -v pv &>/dev/null; then
+   pv "$target" | sha256sum | awk '{print $1}'  >"$dir_name/.checksum"
+  else
+   sha256sum "$target" | awk '{print $1}' >"$dir_name/.checksum"
+  fi
+
+  echo "Splitting '$target' into $num_parts parts..."
+  split -n "$num_parts" -a 4 -d "$target" "$dir_name/${base_name}.part"
+
+  echo "Success! Your split files and integrity data are in: $dir_name"
+
+ elif [[ "$action" == "combine" ]]; then
+  local clean_target="${target%/}"
+
+  if [[ ! -d "$clean_target" ]]; then
+   echo "Error: Directory '$clean_target' does not exist." 
+   exit 1
+  fi
+
+  local out_file="${clean_target%-parts}"
+
+  if [[ "$clean_target" == "$out_file" ]]; then
+   out_file="${clean_target}_combined" 
+  fi
+
+  if [[ -f "$out_file" ]]; then
+   echo -n "Warning: Output file '$out_file' already exists. Overwrite? (y/n): " 
+   read -r confirm
+   if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+    echo "Aborting."
+    exit 1
+   fi
+  fi
+
+  echo "Combining parts from '$clean_target'..."
+  if command -v pv &>/dev/null; then
+   
+   pv "$clean_target"/*.part* >"$out_file"
+  else
+   cat "$clean_target"/*.part*  >"$out_file"
+  fi
+
+  if [[ -f "$clean_target/.checksum" ]]; then
+   echo "Verifying file integrity..."
+   local original_hash=$(cat "$clean_target/.checksum") 
+   local new_hash
+
+   if command -v pv &>/dev/null; then
+    new_hash=$(pv "$out_file" | sha256sum | awk '{print $1}') 
+   else
+    new_hash=$(sha256sum "$out_file" | awk '{print $1}') 
+   fi
+
+   if [[ "$original_hash" == "$new_hash" ]]; then
+    
+    echo "✅ Integrity check PASSED. File is perfectly restored!" 
+    echo "Success! Your combined file is located at: $out_file" 
+
+    echo -n "Would you like to delete the parts directory '$clean_target'? (y/n): "
+    read -r cleanup_confirm
+    if [[ "$cleanup_confirm" == "y" || "$cleanup_confirm" == "Y" ]]; then
+     
+     rm -rf "$clean_target"
+     echo "🗑️  Parts directory deleted."
+    else
+     echo "📁 Parts directory kept." 
+    fi
+   else
+    echo "❌ Error: Integrity check FAILED! The combined file does not match the original." 
+    exit 1
+   fi
+  else
+   echo "⚠️ Warning: No .checksum file found. Combined successfully, but integrity could not be verified." 
+   echo "Your combined file is located at: $out_file" 
+  fi
+ fi
+}
