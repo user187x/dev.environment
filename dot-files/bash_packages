@@ -154,6 +154,7 @@ packages=(
  "mpv"
  "duf"
  "fzf"
+ "imagemagick"
  "zenity"
  "pipx"
  "tigervnc-common" 
