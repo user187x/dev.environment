@@ -4,11 +4,23 @@ if ! command -v git > /dev/null 2>&1; then
  sudo apt install git
 fi
 
-git config --global user.name "xxx"
-git config --global user.email "xxx@xxx.com"
+readonly defautl_user="$USER"
+readonly default_email="$user@xxx.com"
+readonly default_editor="vim"
+
+read -p "Enter username: " user
+read -p "Enter email: " email
+read -p "Enter text editor: " editor
+
+NAME="${defautl_user:-user}" 
+EMAIL="${defautl_email:-email}" 
+EDITOR="${defautl_editor:-editor}" 
+
+git config --global user.name "$NAME"
+git config --global user.email "$EMAIL"
 git config --global init.defaultBranch main
 git config --global color.ui auto
-git config --global core.editor "vim"
+git config --global core.editor "$EDITOR"
 
 # 3. Pull & Push Behavior
 git config --global pull.rebase true
@@ -19,7 +31,7 @@ git config --global alias.st status
 git config --global alias.co checkout
 git config --global alias.br branch
 git config --global alias.ci commit
-git config --global alias.lg "log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit"
 git config --global alias.unstage 'reset HEAD --'
+git config --global alias.lg "log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit"
 
 echo "Git configuration complete!"
