@@ -12,6 +12,9 @@ __BASH_ALIASES__=1
 
 SCRIPT_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# This env must be set for proper navigation
+DEV_HOME=${DEV_HOME}
+
 alias ls='ls --color=auto'
 alias dir='dir --color=auto'
 alias vdir='vdir --color=auto'
@@ -43,23 +46,11 @@ else
 fi
 alias bat="$batcmd --style=full"
 
-if [[ -f "$SCRIPT_HOME/run" ]]; then
- alias re-source="$SCRIPT_HOME/run"
-fi
-
-# Project Navigation
-DEV_ENV_PATH="$HOME/dev.environment"
-
-if [[ -d "$DEV_ENV_PATH" ]]; then
- alias denv="cd $DEV_ENV_PATH"
+if [[ -d "$DEV_HOME" ]]; then
+ alias denv="cd $DEV_HOME"
 else
- if [[ -f "$SCRIPT_HOME/run" ]]; then
-  ln -s "$SCRIPT_HOME" "$DEV_ENV_PATH"
- fi
- # Only echo warning if interactive
- if [[ $- == *i* ]]; then
-  echo -e "e\[1;93mSetup your dev.environment project to initialize properly: $DEV_ENV_PATH missing\e[0m"
- fi
+ echo -e " (\e[91m!\e[0m) The dev.environment env was not found"
+ exit 1
 fi
 
 # kubernetes aliases

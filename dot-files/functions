@@ -6,6 +6,9 @@
 
 __BASH_FUNCTIONS__=1
 
+# Fetch value from env (expressed for clarity)
+$DEV_HOME="${DEV_HOME}"
+
 # Define global colors for consistency across functions
 R='\e[1;91m' # Red
 G='\e[1;92m' # Green

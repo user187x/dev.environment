@@ -12,6 +12,12 @@ __BASH_PACKAGES__=1
 
 # Global variables
 SCRIPT_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEV_HOME="${DEV_HOME}"
+
+if [[ -z "$DEV_HOME" ]] || [[ ! -d "$DEV_HOME" ]]; then
+ echo -e " (\e[91m!\e[0m) The '\e[94mdev.environment\e[0m' env was found"
+ exit 1
+fi
 
 # Configuration
 PKG_BACKUP_DIR="$SCRIPT_HOME/package-backup"

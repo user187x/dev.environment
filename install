@@ -8,7 +8,20 @@
 set -euo pipefail
 
 # Global Constants
-readonly DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Critial for for other scripts to find
+export "DEV_HOME=$DEV_HOME"
+
+if ! grep "DEV_HOME" "$HOME/.bashrc" > /dev/null 2>&1; then
+
+ echo -e "\e[90mAdding DEV_HOME to bashrc\e[0m"
+
+ echo >> "$HOME/.bashrc"
+ echo "# Path to dev.environment directory" >> "$HOME/.bashrc"
+ echo "export DEV_HOME=$DEV_HOME" >> "$HOME/.bashrc"
+ echo >> "$HOME/.bashrc"
+fi
 
 readonly XDG_DATA_HOME="$HOME/.local/share"
 readonly XDG_CONFIG_HOME="$HOME/.config"
@@ -121,7 +134,7 @@ configure_bash() {
  for FILE in "${!DOT_FILES[@]}"; do
 
   SRC="$DOT_FILE_SRC/$FILE"
-  DST="$HOME/.${DOT_FILE[$FILE]}"
+  DST="$HOME/.${DOT_FILES[$FILE]}"
 
   link_resource "$SRC" "$DST"
 
@@ -133,7 +146,7 @@ configure_bash() {
  local SOURCE_FILES=("packages" "function")
 
  for FILE in "${SOURCE_FILES[@]}"; do
-  source 
+  source "$DOT_FILE_SRC/$FILE" 
  done
 
  source "$HOME/.bashrc"
@@ -168,7 +181,7 @@ main() {
  install_fonts
  install_resources
 
- setup_bash
+ configure_bash
  
  echo -e "Configuring Vim..."
  link_resource "$DEV_HOME/vim" "$HOME/.vim"

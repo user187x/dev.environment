@@ -173,3 +173,7 @@ terminal_soundFx open
 
 # Trap Close Sound
 trap 'terminal_soundFx close' EXIT
+
+# Path to dev.environment directory
+export DEV_HOME=/home/xxx/dev.environment
+
