@@ -160,9 +160,11 @@ packages=(
  "mpv"
  "duf"
  "fzf"
+ "chromium"
  "fsnotify"
  "inotifywait"
  "flatpak"
+ "gnome-software-plugin-flatpak"
  "imagemagick"
  "zenity"
  "pipx"
@@ -223,7 +225,7 @@ for item in "${packages[@]}"; do
    installed+=("$package")
 
    # 3. If Online Success -> Backup for next time
-   backup_pkg "$package"
+   #backup_pkg "$package"
   else
    echo -e "Online install failed for [\e[1;91m$package\e[0m]. Trying Cache..."
 
@@ -240,9 +242,9 @@ for item in "${packages[@]}"; do
   installed+=("$package")
 
   # Optional: Even if installed, ensure we have a backup if we are online
-  if [ "$ONLINE" = true ]; then
-   backup_pkg "$package"
-  fi
+  #if [ "$ONLINE" = true ]; then
+  # backup_pkg "$package"
+  #fi
  fi
 done
 
@@ -273,6 +275,9 @@ sudo apt update -y && sudo apt upgrade -y
 
 echo ""
 echo "--- 🚀 Starting Custom Installations ---"
+
+# Add flatpak repo
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
 if ! command -v terraform >/dev/null 2>&1; then
 

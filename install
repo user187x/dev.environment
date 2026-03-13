@@ -13,15 +13,28 @@ DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Critial for for other scripts to find
 export "DEV_HOME=$DEV_HOME"
 
-if ! grep "DEV_HOME" "$HOME/.bashrc" > /dev/null 2>&1; then
+if ! grep "export DEV_HOME=" "$HOME/.bashrc" > /dev/null 2>&1; then
 
  echo -e "\e[90mAdding DEV_HOME to bashrc\e[0m"
-
  echo >> "$HOME/.bashrc"
  echo "# Path to dev.environment directory" >> "$HOME/.bashrc"
  echo "export DEV_HOME=$DEV_HOME" >> "$HOME/.bashrc"
  echo >> "$HOME/.bashrc"
 fi
+
+SRC=("aliases" "functions" "completions")
+
+for file in "${SRC[@]}"; do
+
+ path="$DEV_HOME/dot-files/$file"
+
+ if ! grep "source $path" "$HOME/.bashrc" > /dev/null 2>&1; then
+  echo -e "\e[90mAdding source entry \e[0m\e[93m$file\e[0m\e[90m to bashrc\e[0m"
+  echo "# Path to dev.environment $file file" >> "$HOME/.bashrc"
+  echo "source $path" >> "$HOME/.bashrc"
+  echo >> "$HOME/.bashrc"
+ fi
+done
 
 readonly XDG_DATA_HOME="$HOME/.local/share"
 readonly XDG_CONFIG_HOME="$HOME/.config"
@@ -127,6 +140,7 @@ configure_bash() {
  declare -A DOT_FILES
 
  DOT_FILES["aliases"]=".bash_aliases"
+ DOT_FILES["functions"]=".bash_functions"
  DOT_FILES["completions"]=".bash_completions"
  DOT_FILES["bashrc"]=".bashrc"
 
@@ -137,19 +151,12 @@ configure_bash() {
   DST="$HOME/${DOT_FILES[$FILE]}"
 
   link_resource "$SRC" "$DST"
-
+  echo -e "(\e[93mi\e[0m) Sourcing script $DST"
+  source "$DST"
  done
  
  echo "Completed linking bash resources"
  echo
-
- local SOURCE_FILES=("packages" "function")
-
- for FILE in "${SOURCE_FILES[@]}"; do
-  source "$DOT_FILE_SRC/$FILE" 
- done
-
- source "$HOME/.bashrc"
 }
 
 # ==========================================
@@ -162,13 +169,13 @@ main() {
  echo -e "${GRAY}Initializing Dev Environment${END}"
  echo
 
- if [ -z "$DISPLAY" ]; then
-  echo "Running headless"
- else
-  zenity --question \
-   --title="Confirmation" \
-   --text="Installing environment. Continue?" > /dev/null 2>&1
- fi
+# if [ -z "$DISPLAY" ]; then
+#  echo "Running headless"
+# else
+#  zenity --question \
+#   --title="Confirmation" \
+#   --text="Installing environment. Continue?" > /dev/null 2>&1
+# fi
 
  # Ensure sudo permissions upfront to prevent timeout
  sudo -v
@@ -176,6 +183,17 @@ main() {
  # Safety check for running Tmux
  if [[ -n "${TMUX:-}" ]]; then
   echo -e "${RED}Terminate Tmux before proceeding${END}"
+ fi
+
+ # Installing addtional packages
+ PKG_SCRIPT="$DEV_HOME/dot-files/packages"
+
+ if [[ ! -f "$PKG_SCRIPT" ]]; then
+  echo -e "(\e[91m!\e[0m) Resource '\e[93mpackage\e[0m' was missing. Terminating..."
+  exit 1
+ else
+  echo -e "(\e[27mi\e[0m) Package definition resource '\e[92mpackage\e[0m' found!"
+  $PKG_SCRIPT
  fi
 
  install_fonts
