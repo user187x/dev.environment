@@ -41,6 +41,7 @@ clock() {
 export -f clock
 
 clipboard() {
+
  local G='\033[0;92m'
  local R='\033[0;91m'
  local Y='\033[1;93m'
@@ -103,6 +104,27 @@ clipboard() {
   echo -e " ${R}(!)${NC} Could not detect a valid clipboard utility."
   return 1
  fi
+}
+
+network_check () {
+
+ if [[ "$#" -gt 0 ]]; then
+  read -p "Enter test URL: " url
+ fi
+
+ local DEFAULT="https://www.google.com"
+ local URL="${DEFAULT:-url}"
+
+ pass=$(curl -s --output /dev/null -o /dev/null -w %{http_code} "$URL" > /dev/null)
+
+ if [[ "$pass" -eq 0 ]]; then
+  echo "Network Connected"
+  return 0
+ else
+  echo "Network Disconnected"
+  return 1
+ fi
+
 }
 
 fmt() {

@@ -106,16 +106,37 @@ setup_tmux() {
  fi
 }
 
-setup_bash() {
+configure_bash() {
 
  echo -e "Configuring Bash..."
 
- local dot_files_dir="$DEV_HOME/dot-files"
- local dot_files=("bashrc" "bash_packages" "bash_aliases" "bash_functions" "bash_completions")
+ local DOT_FILE_SRC="$DEV_HOME/dot-files"
+ declare -A DOT_FILES
 
- for file in "${dot_files[@]}"; do
-  link_resource "$dot_files_dir/$file" "$HOME/.$file"
+ DOT_FILES["aliases"]=".bash_aliases"
+ DOT_FILES["completions"]=".bash_completions"
+ DOT_FILES["bashrc"]=".bashrc"
+
+ # Link dot files to user's $HOME directory
+ for FILE in "${!DOT_FILES[@]}"; do
+
+  SRC="$DOT_FILE_SRC/$FILE"
+  DST="$HOME/.${DOT_FILE[$FILE]}"
+
+  link_resource "$SRC" "$DST"
+
  done
+ 
+ echo "Completed linking bash resources"
+ echo
+
+ local SOURCE_FILES=("packages" "function")
+
+ for FILE in "${SOURCE_FILES[@]}"; do
+  source 
+ done
+
+ source "$HOME/.bashrc"
 }
 
 # ==========================================

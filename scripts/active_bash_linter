@@ -1,0 +1,23 @@
+#!/bin/bash
+
+read -e -r -p "Enter File Path: " FILE_PATH
+
+MODIFIED=$(stat -c %Y "$FILE_PATH")
+LATEST=$(stat -c %Y "$FILE_PATH")
+
+while true; do 
+
+ LATEST=$(stat -c %Y "$FILE_PATH")
+
+ # Check if date changed since last check
+ if [[ "$MODIFIED" -ne "$LATEST" ]]; then
+  # Bring modified date upto latest
+  MODIFIED="$LATEST"
+
+  # Check if any changes broke anything
+  shellcheck "$FILE_PATH"
+ fi
+
+ sleep 1
+
+done
