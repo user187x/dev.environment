@@ -134,7 +134,7 @@ configure_bash() {
  for FILE in "${!DOT_FILES[@]}"; do
 
   SRC="$DOT_FILE_SRC/$FILE"
-  DST="$HOME/.${DOT_FILES[$FILE]}"
+  DST="$HOME/${DOT_FILES[$FILE]}"
 
   link_resource "$SRC" "$DST"
 
