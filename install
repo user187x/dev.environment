@@ -225,7 +225,8 @@ main() {
   echo -e "$INFO Package script '${BLUE}package${END}' found!"
 
   # Execute the script
-  $PKG_SCRIPT
+  ${RESOURCE_PATH["PKG_SCRIPT"]}
+
  fi
 
  install_fonts
