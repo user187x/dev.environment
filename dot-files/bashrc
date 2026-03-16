@@ -173,11 +173,15 @@ trap 'terminal_soundFx close' EXIT
 
 # Path to dev.environment directory
 export DEV_HOME=/home/xxx/dev.environment
+
 # Path to dev.environment aliases file
 source /home/xxx/dev.environment/dot-files/aliases
+
 # Path to dev.environment completions file
 source /home/xxx/dev.environment/dot-files/completions
 
 # Path to dev.environment functions file
 source /home/xxx/dev.environment/dot-files/functions
 
+# Added by LM Studio CLI (lms)
+export PATH="$PATH:/home/xxx/.lmstudio/bin"

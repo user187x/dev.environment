@@ -10,28 +10,55 @@ set -euo pipefail
 # Global Constants
 DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-readonly XDG_DATA_HOME="$HOME/.local/share"
-readonly XDG_CONFIG_HOME="$HOME/.config"
-readonly XDG_CACHE_HOME="$HOME/.cache"
+declare -A RESOURCE_PATH
 
-readonly FONT_DIR="$XDG_DATA_HOME/fonts"
-readonly TMUX_DIR="$XDG_CONFIG_HOME/tmux"
-readonly AUDIO_DIR="$XDG_DATA_HOME/audio"
+RESOURCE_PATH["XDG_DATA_HOME"]="$HOME/.local/share"
+RESOURCE_PATH["XDG_CACHE_HOME"]="$HOME/.local/cache"
+RESOURCE_PATH["XDG_CONFIG_HOME"]="$HOME/.config"
+RESOURCE_PATH["DOT_FILES"]="$DEV_HOME/dot-files"
+RESOURCE_PATH["PKG_SCRIPT"]="${RESOURCE_PATH[DOT_FILES]}/packages"
+RESOURCE_PATH["BASHRC_SRC"]="${RESOURCE_PATH[DOT_FILES]}/bashrc"
+RESOURCE_PATH["BASHRC_DST"]="$HOME/.bashrc"
+RESOURCE_PATH["FONT_SRC"]="$DEV_HOME/resources/fonts"
+RESOURCE_PATH["FONT_DST"]="${RESOURCE_PATH[XDG_DATA_HOME]}/fonts"
+RESOURCE_PATH["AUDIO_SRC"]="$DEV_HOME/resources/media/audio"
+RESOURCE_PATH["AUDIO_DST"]="${RESOURCE_PATH[XDG_DATA_HOME]}/audio"
+RESOURCE_PATH["TMUX_SRC"]="$DEV_HOME/tmux"
+RESOURCE_PATH["TMUX_DST"]="${RESOURCE_PATH[XDG_CONFIG_HOME]}/tmux"
+RESOURCE_PATH["TPM_SCRIPT"]="${RESOURCE_PATH[TMUX_DST]}/plugins/tpm/bin/install_plugins"
+RESOURCE_PATH["VIM_SRC"]="$DEV_HOME/vim"
+RESOURCE_PATH["VIM_DST"]="$HOME/.vim"
 
 # Colors for logging
 readonly END='\e[0m'
-readonly GREEN='\e[32m'
+readonly GREEN='\e[92m'
 readonly BLUE='\e[34m'
 readonly PURPLE='\e[35m'
-readonly YELLOW='\e[33m'
-readonly RED='\e[31m'
+readonly YELLOW='\e[93m'
+readonly RED='\e[91m'
 readonly GRAY='\e[90m'
 readonly WHITE='\e[97m'
-readonly BRIGHT_YELLOW='\e[93m'
+
+readonly WARN="(${YELLOW}*${END})"
+readonly INFO="(${WHITE}i${END})"
+readonly ERROR="(${RED}!${END})"
+readonly QESTN="(${BLUE}?${END})"
 
 # ==========================================
 # Utility Functions
 # ==========================================
+
+preflight_check() {
+
+ for RESOURCE in "${!RESOURCE_PATH[@]}"; do 
+  if [[ ! -x "${RESOURCE_PATH[$RESOURCE]}" ]]; then
+    echo -e "$ERROR Resource not found: ${YELLOW}$RESOURCE${END}"
+    exit 1
+  fi
+ done
+
+ echo -e "$INFO Referential integrity validated"
+}
 
 link_resource() {
 
@@ -39,7 +66,7 @@ link_resource() {
  local dest="$2"
 
  local dest_dir=$(dirname "$dest")
- mkdir -p "$dest_dir"
+ mkdir -p "$dest_dir"if
 
  if [[ -e "$dest" || -L "$dest" ]]; then
   rm -rf "$dest"
@@ -57,7 +84,7 @@ install_fonts() {
  mkdir -p "$FONT_DIR"
 
  echo -e "${GRAY}"
- tar -xvf "$DEV_HOME/resources/fonts/fonts.tar" -C "$FONT_DIR"
+ tar -xvf "${RESOURCE_PATH[FONT_SRC]}/fonts.tar" -C "$FONT_DIR"
  echo -e "${END}"
 
  if command -v fc-cache &>/dev/null; then
@@ -75,16 +102,14 @@ install_resources() {
 
  echo
  echo -e "${WHITE}Installing resources...${END}"
-
- local SRC="$DEV_HOME/resources/media/audio"
- local DST="$AUDIO_DIR"
+ 
  mkdir -p "$DST"
 
  # Copy content and fix permissions
- sudo cp -rfT "$SRC" "$DST"
- sudo chown -R "$USER:$USER" "$DST"
+ sudo cp -rfT "${RESOURCE_PATH[AUDIO_SRC]}" "${RESOURCE_PATH[AUDIO_DST]}"
+ sudo chown -R "$USER:$USER" "${RESOURCE_PATH[AUDIO_DST]}"
  
- echo -e "Audio resources installed to ${GREEN}$DST${END}"
+ echo -e "$INFO Audio resources installed to ${GREEN}${RESOURCE_PATH[AUDIO_DST]}${END}"
 }
 
 setup_tmux() {
@@ -92,17 +117,17 @@ setup_tmux() {
  echo -e "${GRAY}Configuring Tmux...${END}"
 
  # Link the main configuration directory
- link_resource "$DEV_HOME/tmux" "$TMUX_DIR"
+ link_resource "${RESOURCE_PATH[TMUX_SRC]}" "${RESOURCE_PATH[TMUX_DST]}"
 
- # Initialize TPM (Tmux Plugin Manager)
- local TPM_INSTALL_SCRIPT="$TMUX_DIR/plugins/tpm/bin/install_plugins"
+ if [[ -x "${RESOURCE_PATH[TPM_SCRIPT]}" ]]; then
 
- if [[ -x "$TPM_INSTALL_SCRIPT" ]]; then
-  echo -e "Running Tmux Plugin Manager installer..."
+  echo -e "$INFO Running Tmux Plugin-Manager installation..."
+
   # Running inside a subshell to avoid directory changing side-effects
-  ("$TPM_INSTALL_SCRIPT")
+  ("${RESOURCE_PATH[TPM_SCRIPT]}")
  else
-  echo -e "${YELLOW}TPM installer not found at $tpm_install_script${END}"
+  echo -e "$ERROR TPM installer not found at path: ${RESOURCE_PATH[TPM_SCRIPT]}"
+  exit 1
  fi
 }
 
@@ -110,23 +135,28 @@ configure_bash() {
 
  echo -e "Configuring Bash..."
 
- local DOT_FILE_SRC="$DEV_HOME/dot-files"
- declare -A DOT_FILES
+ declare -A MAPPER
 
- DOT_FILES["aliases"]=".bash_aliases"
- DOT_FILES["functions"]=".bash_functions"
- DOT_FILES["completions"]=".bash_completions"
- DOT_FILES["bashrc"]=".bashrc"
+ MAPPER["aliases"]=".bash_aliases"
+ MAPPER["functions"]=".bash_functions"
+ MAPPER["completions"]=".bash_completions"
+ MAPPER["bashrc"]=".bashrc"
 
  # Link dot files to user's $HOME directory
- for FILE in "${!DOT_FILES[@]}"; do
+ for FILE in "${!MAPPER[@]}"; do
 
-  SRC="$DOT_FILE_SRC/$FILE"
-  DST="$HOME/${DOT_FILES[$FILE]}"
+  RESOURCE_SRC="${RESOURCE_PATH[DOT_FILES]}/$FILE"
+  
+  if [[ ! -f "$RESOURCE_SRC" ]]; then
+   echo -e "$ERROR Failure referencing source file: ${YELLOW}$RESOURCE_SRC${END}"
+   exit 1
+  fi
 
-  link_resource "$SRC" "$DST"
-  echo -e "(\e[93mi\e[0m) Sourcing script $DST"
-  source "$DST"
+  RESOURCE_DST="$HOME/${MAPPER[$FILE]}"
+
+  link_resource "$RESOURCE_SRC" "$RESOURCE_$DST"
+  echo -e "$INFO Sourcing script ${BLUE}$RESOURCE_DST${END}"
+  source "$RESOURCE_DST"
  done
  
  echo "Completed linking bash resources"
@@ -145,7 +175,7 @@ main() {
  # Safety check for running Tmux
  if [[ -n "${TMUX:-}" ]]; then
   echo
-  echo -e "(${RED}!${END}) Terminate ${YELLOW}Tmux${END} before proceeding"
+  echo -e "$ERROR Terminate ${YELLOW}Tmux${END} process before proceeding"
   echo
   exit 1
  fi
@@ -155,39 +185,46 @@ main() {
  echo
 
  # Critial for for other scripts to find
- echo -e "(\e[27mi\e[0m) Setting '\e[92mDEV_HOM\e[0m' env"
+ echo -e "$INFO Setting env ${GREEN}DEV_HOME${END}=${WHITE}$DEV_HOME${END}"
+
  export "DEV_HOME=$DEV_HOME"
 
  if ! grep "export DEV_HOME=" "$HOME/.bashrc" > /dev/null 2>&1; then
-  echo -e "\e[90mAdding DEV_HOME to bashrc\e[0m"
-  echo >> "$HOME/.bashrc"
-  echo "# Path to dev.environment directory" >> "$HOME/.bashrc"
-  echo "export DEV_HOME=$DEV_HOME" >> "$HOME/.bashrc"
-  echo >> "$HOME/.bashrc"
+
+  BASH_RC="$HOME/.bashrc"
+  EXPORT_CMD="export DEV_HOME=$DEV_HOME"
+
+  echo -e "$INFO Adding ${GREEN}DEV_HOME${END} export to $BASH_RC"
+
+  # Writting export command to the users bashrc file
+  echo >> "$BASH_RC"
+  echo "# Path to dev.environment directory" >> "$BASH_RC"
+  echo "$EXPORT_CMD" >> "$BASH_RC"
+  echo >> "$BASH_RC"
+
  fi
 
- SRC=("aliases" "functions" "completions")
+ TARGETS=("aliases" "functions" "completions")
 
- for file in "${SRC[@]}"; do
+ for TARGET in "${TARGETS[@]}"; do
 
-  path="$DEV_HOME/dot-files/$file"
+  ENTRY="$DEV_HOME/dot-files/$TARGET"
 
-  if ! grep "source $path" "$HOME/.bashrc" > /dev/null 2>&1; then
-   echo -e "\e[90mAdding source entry \e[0m\e[93m$file\e[0m\e[90m to bashrc\e[0m"
-   echo "# Path to dev.environment $file file" >> "$HOME/.bashrc"
-   echo "source $path" >> "$HOME/.bashrc"
+  if ! grep "source $ENTRY" "$HOME/.bashrc" > /dev/null 2>&1; then
+   echo -e "${GRAY}Adding source entry ${END}${YELLOW}$TARGET${END}${GRAY} to bashrc${END}"
+   echo "# Path to dev.environment $TARGET file" >> "$HOME/.bashrc"
+   echo "source $TARGET" >> "$HOME/.bashrc"
    echo >> "$HOME/.bashrc"
   fi
  done
 
- # Installing addtional packages
- PKG_SCRIPT="$DEV_HOME/dot-files/packages"
-
- if [[ ! -f "$PKG_SCRIPT" ]]; then
-  echo -e "(\e[91m!\e[0m) Resource '\e[93mpackage\e[0m' was missing. Terminating..."
+ if [[ ! -f "${RESOURCE_PATH[PKG_SCRIPT]}" ]]; then
+  echo -e "$ERROR Resource '${YELLOW}package${END}' was missing. Terminating..."
   exit 1
  else
-  echo -e "(\e[27mi\e[0m) Package definition resource '\e[92mpackage\e[0m' found!"
+  echo -e "$INFO Package script '${BLUE}package${END}' found!"
+
+  # Execute the script
   $PKG_SCRIPT
  fi
 
@@ -197,7 +234,7 @@ main() {
  configure_bash
  
  echo -e "Configuring Vim..."
- link_resource "$DEV_HOME/vim" "$HOME/.vim"
+ link_resource "${RESOURCE_PATH[VIM_SRC]}" "${RESOURCE_PATH[VIM_DST]}"
 
  setup_tmux
 
