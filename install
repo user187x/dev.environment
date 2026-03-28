@@ -52,122 +52,11 @@ preflight_check() {
 
  for RESOURCE in "${!RESOURCE_PATH[@]}"; do 
   if [[ ! -x "${RESOURCE_PATH[$RESOURCE]}" ]]; then
-    echo -e "$ERROR Resource not found: ${YELLOW}$RESOURCE${END}"
-    exit 1
+   echo -e "$ERROR Resource not found: ${YELLOW}$RESOURCE${END}=${WHITE}${RESOURCE_PATH[$RESOURCE]}${END}"
   fi
  done
 
  echo -e "$INFO Referential integrity validated"
-}
-
-link_resource() {
-
- local src="$1"
- local dest="$2"
-
- local dest_dir=$(dirname "$dest")
- mkdir -p "$dest_dir"if
-
- if [[ -e "$dest" || -L "$dest" ]]; then
-  rm -rf "$dest"
- fi
-
- ln -s "$src" "$dest"
- echo -e "${WHITE}Linked${END}: ${BLUE}$dest${END} -> ${GREEN}$src${END}"
-}
-
-install_fonts() {
-
- echo -e "Installing fonts..."
-
- # Ensure destination directory exists
- mkdir -p "$FONT_DIR"
-
- echo -e "${GRAY}"
- tar -xvf "${RESOURCE_PATH[FONT_SRC]}/fonts.tar" -C "$FONT_DIR"
- echo -e "${END}"
-
- if command -v fc-cache &>/dev/null; then
-  fc-cache -f
-  echo -e "${WHITE}Font cache updated.${END}"
- else
-  echo -e "${YELLOW}fc-cache not found, attempting to install...${END}"
-  if sudo apt install fc-cache &> /dev/null; then
-   fc-cache -f
-  fi
- fi
-}
-
-install_resources() {
-
- echo
- echo -e "${WHITE}Installing resources...${END}"
- 
- mkdir -p "$DST"
-
- # Copy content and fix permissions
- sudo cp -rfT "${RESOURCE_PATH[AUDIO_SRC]}" "${RESOURCE_PATH[AUDIO_DST]}"
- sudo chown -R "$USER:$USER" "${RESOURCE_PATH[AUDIO_DST]}"
- 
- echo -e "$INFO Audio resources installed to ${GREEN}${RESOURCE_PATH[AUDIO_DST]}${END}"
-}
-
-setup_tmux() {
-
- echo -e "${GRAY}Configuring Tmux...${END}"
-
- # Link the main configuration directory
- link_resource "${RESOURCE_PATH[TMUX_SRC]}" "${RESOURCE_PATH[TMUX_DST]}"
-
- if [[ -x "${RESOURCE_PATH[TPM_SCRIPT]}" ]]; then
-
-  echo -e "$INFO Running Tmux Plugin-Manager installation..."
-
-  # Running inside a subshell to avoid directory changing side-effects
-  ("${RESOURCE_PATH[TPM_SCRIPT]}")
- else
-  echo -e "$ERROR TPM installer not found at path: ${RESOURCE_PATH[TPM_SCRIPT]}"
-  exit 1
- fi
-}
-
-configure_bash() {
-
- echo -e "Configuring Bash..."
-
- declare -A MAPPER
-
- MAPPER["aliases"]=".bash_aliases"
- MAPPER["functions"]=".bash_functions"
- MAPPER["completions"]=".bash_completions"
- MAPPER["bashrc"]=".bashrc"
-
- # Link dot files to user's $HOME directory
- for FILE in "${!MAPPER[@]}"; do
-
-  RESOURCE_SRC="${RESOURCE_PATH[DOT_FILES]}/$FILE"
-  
-  if [[ ! -f "$RESOURCE_SRC" ]]; then
-   echo -e "$ERROR Failure referencing source file: ${YELLOW}$RESOURCE_SRC${END}"
-   exit 1
-  fi
-
-  RESOURCE_DST="$HOME/${MAPPER[$FILE]}"
-
-  link_resource "$RESOURCE_SRC" "$RESOURCE_$DST"
-  echo -e "$INFO Sourcing script ${BLUE}$RESOURCE_DST${END}"
-  source "$RESOURCE_DST"
- done
- 
- echo "Completed linking bash resources"
- echo
-}
-
-# ==========================================
-# Main Execution
-# ==========================================
-
-main() {
 
  # Ensure sudo permissions upfront to prevent timeout
  sudo -v
@@ -203,15 +92,127 @@ main() {
   echo >> "$BASH_RC"
 
  fi
+}
+
+link_resource() {
+
+ local SRC_RESOURCE="$1"
+ local DST_RESOURCE="$2"
+
+ local DST_PATH=$(dirname "$DST_RESOURCE")
+ echo -e "${INFO} Ensuring path integrity: ${GRAY}${DST_PATH}${END}"
+ mkdir -p "$DST_PATH"
+
+ echo -e "${INFO} Removing/Unlinking any existing resources: ${WHITE}${DST_PATH}${END}"
+ if [[ -e "$DST_RESOURCE" || -L "$DST_RESOURCE" ]]; then
+  rm -rf "$DST_RESOURCE"
+ fi
+
+ ln -s "$SRC_RESOURCE" "$DST_RESOURCE"
+ echo -e "${INFO} ${GREEN}Linked${END}: ${WHITE}${DST_RESOURCE}${END} -> ${GREEN}${SRC_RESOURCE}${END}"
+}
+
+install_fonts() {
+
+ echo -e "Installing fonts..."
+
+ # Ensure destination directory exists
+ mkdir -p ${RESOURCE_PATH["FONT_SRC"]}
+
+ echo -e "${GRAY}"
+ tar -xvf "${RESOURCE_PATH[FONT_SRC]}/fonts.tar" -C "${RESOURCE_PATH[FONT_DST]}"
+ echo -e "${END}"
+
+ if command -v fc-cache &>/dev/null; then
+  fc-cache -f
+  echo -e "${WHITE}Font cache updated.${END}"
+ else
+  echo -e "${YELLOW}fc-cache not found, attempting to install...${END}"
+  if sudo apt install fc-cache &> /dev/null; then
+   fc-cache -f
+  fi
+ fi
+}
+
+install_resources() {
+
+ echo
+ echo -e "${WHITE}Installing resources...${END}"
+
+ echo -e "${GRAY}Ensuring desitination path exists :${END} ${WHITE} ${RESOURCE_PATH[AUDIO_DST]} ${END}"
+ mkdir -p "${RESOURCE_PATH[AUDIO_DST]}" 
+
+ # Copy content and fix permissions
+ sudo cp -rfT "${RESOURCE_PATH[AUDIO_SRC]}" "${RESOURCE_PATH[AUDIO_DST]}"
+ sudo chown -R "$USER:$USER" "${RESOURCE_PATH[AUDIO_DST]}"
+ 
+ echo -e "$INFO Audio resources installed to ${GREEN}${RESOURCE_PATH[AUDIO_DST]}${END}"
+}
+
+setup_tmux() {
+
+ echo -e "${GRAY}Configuring Tmux...${END}"
+
+ # Link the main configuration directory
+ link_resource "${RESOURCE_PATH[TMUX_SRC]}" "${RESOURCE_PATH[TMUX_DST]}"
+
+ if [[ -x "${RESOURCE_PATH[TPM_SCRIPT]}" ]]; then
+
+  echo -e "$INFO Running Tmux Plugin-Manager installation..."
+
+  # Running inside a subshell to avoid directory changing side-effects
+  ("${RESOURCE_PATH[TPM_SCRIPT]}")
+ else
+  echo -e "$ERROR TPM installer not found at path: ${RESOURCE_PATH[TPM_SCRIPT]}"
+  exit 1
+ fi
+}
+
+setup_vim() {
+
+ echo -e "$INFO ${GRAY}Configuring Vim...${END}"
+ link_resource "${RESOURCE_PATH[VIM_SRC]}" "${RESOURCE_PATH[VIM_DST]}"
+}
+
+configure_bash() {
+
+ echo -e "$INFO ${GRAY}Configuring Bash...${END}"
+
+ declare -A MAPPER
+
+ MAPPER["aliases"]=".bash_aliases"
+ MAPPER["functions"]=".bash_functions"
+ MAPPER["completions"]=".bash_completions"
+ MAPPER["bashrc"]=".bashrc"
+
+ # Link dot files to user's $HOME directory
+ for FILE in "${!MAPPER[@]}"; do
+
+  RESOURCE_SRC="${RESOURCE_PATH[DOT_FILES]}/${FILE}"
+  
+  if [[ ! -f "${RESOURCE_SRC}" ]]; then
+   echo -e "$ERROR Failure referencing source file: ${YELLOW}${RESOURCE_SRC}${END}"
+   exit 1
+  fi
+
+  RESOURCE_DST="${HOME}/${MAPPER[$FILE]}"
+
+  link_resource "${RESOURCE_SRC}" "${RESOURCE_DST}"
+  echo -e "$INFO Sourcing script ${BLUE}$RESOURCE_DST${END}"
+  source "$RESOURCE_DST"
+ done
+ 
+ echo "Completed linking bash resources"
+ echo
 
  TARGETS=("aliases" "functions" "completions")
 
  for TARGET in "${TARGETS[@]}"; do
 
-  ENTRY="$DEV_HOME/dot-files/$TARGET"
+  ENTRY="${RESOURCE_PATH[DOT_FILES]}/$TARGET"
 
   if ! grep "source $ENTRY" "$HOME/.bashrc" > /dev/null 2>&1; then
-   echo -e "${GRAY}Adding source entry ${END}${YELLOW}$TARGET${END}${GRAY} to bashrc${END}"
+   echo -e "$INFO ${GRAY}Adding source entry ${END}${YELLOW}$TARGET${END}${GRAY} to bashrc${END}"
    echo "# Path to dev.environment $TARGET file" >> "$HOME/.bashrc"
    echo "source $TARGET" >> "$HOME/.bashrc"
    echo >> "$HOME/.bashrc"
@@ -228,15 +229,22 @@ main() {
   ${RESOURCE_PATH["PKG_SCRIPT"]}
 
  fi
+}
+
+# ==========================================
+# Main Execution
+# ==========================================
+
+main() {
+
+ preflight_check
 
  install_fonts
  install_resources
-
- configure_bash
  
- echo -e "Configuring Vim..."
- link_resource "${RESOURCE_PATH[VIM_SRC]}" "${RESOURCE_PATH[VIM_DST]}"
+ configure_bash
 
+ setup_vim
  setup_tmux
 
  echo -e "Reloading shell configuration..."
