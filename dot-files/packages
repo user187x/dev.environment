@@ -169,6 +169,8 @@ packages=(
  "imagemagick"
  "zenity"
  "pipx"
+ "npm"
+ "nodejs:node"
  "tigervnc-common" 
  "tigervnc-client" 
  "tigervnc-tools" 
