@@ -1,11 +1,5 @@
 #!/bin/bash
 
-if [[ -n "${__BASH_ALIASES__:-}" ]]; then
- return 0
-fi
-
-__BASH_ALIASES__=1
-
 ################################################
 # ALIASES                                      #
 ################################################
@@ -23,9 +17,9 @@ alias fgrep='fgrep --color=auto'
 alias egrep='egrep --color=auto'
 
 # system tool aliases
-alias ll='ls -alF'
-alias la='ls -A'
-alias l='ls -CF'
+alias ll='ls -alF --color=always'
+alias la='ls -A --color=always'
+alias l='ls -CF --color=always'
 
 # dev tool alias
 alias t="tmux"
