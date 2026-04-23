@@ -7,12 +7,12 @@
 __BASH_FUNCTIONS__=1
 
 # Define global colors for consistency across functions
-R='\e[1;91m' # Red
-G='\e[1;92m' # Green
-Y='\e[1;93m' # Yellow
-B='\e[1;94m' # Blue
-M='\e[3;90m' # Muted/Grey
-NC='\e[0m'   # No Color
+RED='\e[1;91m' # Red
+GREEN='\e[1;92m' # Green
+YELLOW='\e[1;93m' # Yellow
+BLUE='\e[1;94m' # Blue
+GRAY='\e[3;90m' # Muted/Grey
+END='\e[0m'   # No Color
 
 ############################################
 # UTILITY FUNCTIONS
@@ -25,12 +25,12 @@ now() {
 clock() {
  # 1. Dependency check
  if ! command -v toilet >/dev/null || ! command -v watch >/dev/null; then
-  echo -e " ${R}(!)${NC} Dependencies [toilet] and [watch] are required."
+  echo -e " ${RED}(!)${END} Dependencies [toilet] and [watch] are required."
   echo " Install them with: sudo apt install toilet watch -y"
   return 1
  fi
 
- echo -e " ${G}(i)${NC} Starting Live Clock (Press ${Y}Ctrl+C${NC} to exit)..."
+ echo -e " ${GREEN}(i)${END} Starting Live Clock (Press ${YELLOW}Ctrl+C${END} to exit)..."
 
  # 2. Execute the watch command
  # -t hides the watch header for a cleaner look
@@ -63,7 +63,7 @@ clipboard() {
     [[ $# -gt 1 ]] && echo "" >>"$_temp_buffer"
     found_any=true
    else
-    echo -e " ${R}(!)${NC} File not found: $file"
+    echo -e " ${RED}(!)${END} File not found: $file"
    fi
   done
 
@@ -74,7 +74,7 @@ clipboard() {
   # Pipe/Stdin Path
   cat >"$_temp_buffer"
  else
-  echo -e " ${G}(i)${NC} Usage: \e[1;27mclipboard\e[0m ${Y}<file1> <file2> ...${NC} or \e[1;27mcommand\e[0m | \e[1;27mclipboard\e[0m"
+  echo -e " ${GREEN}(i)${END} Usage: \e[1;27mclipboard\e[0m ${YELLOW}<file1> <file2> ...${END} or \e[1;27mcommand\e[0m | \e[1;27mclipboard\e[0m"
   return 1
  fi
 
@@ -96,12 +96,12 @@ clipboard() {
 
  if [[ "$success" == "true" ]]; then
   if [[ $# -gt 0 ]]; then
-   echo -e "${M} Contents of ${G}$# file(s)${NC}${M} copied to system clipboard.${NC}"
+   echo -e "${GRAY} Contents of ${GREEN}$# file(s)${END}${GRAY} copied to system clipboard.${END}"
   else
-   echo -e "${G} Input copied to system clipboard.${NC}"
+   echo -e "${GREEN} Input copied to system clipboard.${END}"
   fi
  else
-  echo -e " ${R}(!)${NC} Could not detect a valid clipboard utility."
+  echo -e " ${RED}(!)${END} Could not detect a valid clipboard utility."
   return 1
  fi
 }
@@ -141,17 +141,17 @@ fmt() {
 
  # 2. Validation
  if [[ -z "$target" ]]; then
-  echo -e " Usage : ${G}fmt${NC} [-i] <file|directory>"
+  echo -e " Usage : ${GREEN}fmt${END} [-i] <file|directory>"
   return 1
  fi
 
  if [[ ! -e "$target" ]]; then
-  echo -e " ${R}(!)${NC} Path not found: $target"
+  echo -e " ${RED}(!)${END} Path not found: $target"
   return 1
  fi
 
  if ! command -v shfmt >/dev/null; then
-  echo -e " ${R}(!)${NC} 'shfmt' is not installed."
+  echo -e " ${RED}(!)${END} 'shfmt' is not installed."
   return 1
  fi
 
@@ -169,7 +169,7 @@ fmt() {
 
  # 4. Process Files
  if [[ ${#files[@]} -eq 0 ]]; then
-  echo -e " ${Y}(i)${NC} No shell scripts found in $target"
+  echo -e " ${YELLOW}(i)${END} No shell scripts found in $target"
   return 0
  fi
 
@@ -178,16 +178,16 @@ fmt() {
   if file "$file" | grep -qE 'shell script|text'; then
 
    if [[ "$interactive" == true ]]; then
-    echo -ne " ${Y}?>${NC} Format ${G}$(basename "$file")${NC}? (y/n): "
+    echo -ne " ${YELLOW}?>${END} Format ${GREEN}$(basename "$file")${END}? (y/n): "
     read -r confirm
     [[ "$confirm" != [yY] ]] && continue
    fi
 
    shfmt -i 1 -w "$file"
    if [[ $? -eq 0 ]]; then
-    echo -e " ${M}(i) Formatted:${NC} ${G}$file${NC}"
+    echo -e " ${GRAY}(i) Formatted:${END} ${GREEN}$file${END}"
    else
-    echo -e " ${R}(!)${NC} Failure formatting: $file"
+    echo -e " ${RED}(!)${END} Failure formatting: $file"
    fi
   fi
  done
@@ -298,14 +298,14 @@ function fz {
   xdg-open "$directory" >/dev/null 2>&1
   ;;
  "GoTo")
-  echo -e "${M}Changing directory to: ${G}$directory${NC}"
+  echo -e "${GRAY}Changing directory to: ${GREEN}$directory${END}"
   cd "$directory" || return
   ls -F --color=auto
   ;;
  "Delete")
   if (whiptail --title "Confirm Delete" --yesno "Are you sure you want to delete $count items?" 10 60); then
    rm -rf "${selections[@]}"
-   echo -e "${R}Deleted $count items.${NC}"
+   echo -e "${RED}Deleted $count items.${END}"
   fi
   ;;
  *)
@@ -340,7 +340,7 @@ qr-code() {
   # Generate files
   echo "Saving to ${export_dir}..."
   qrencode -m 2 -s 10 -o "${export_dir}/${export_filename}.png" "$text"
-  echo -e "${G}Saved:${NC} ${export_dir}/${export_filename}.png"
+  echo -e "${GREEN}Saved:${END} ${export_dir}/${export_filename}.png"
  fi
 
  echo "Terminal Preview:"
@@ -361,7 +361,7 @@ export -f image-to-asci
 convert-image() {
  if [[ -f "$1" ]] && [[ -n "$2" ]]; then
   convert "$1" -quality 100 "$2"
-  echo -e "${G}Converted:${NC} $1 -> $2"
+  echo -e "${GREEN}Converted:${END} $1 -> $2"
  else
   echo "Usage: convert-image <input> <output>"
   return 1
@@ -403,14 +403,14 @@ clean() {
  sudo apt autoclean
  sudo apt remove -y
  sudo apt autoremove -y
- echo -e "${G}Cleanup Complete${NC}\n"
+ echo -e "${GREEN}Cleanup Complete${END}\n"
 }
 export -f clean
 
 update() {
  sudo apt-get update
  sudo apt update && sudo apt upgrade -y
- echo -e "${G}Update Complete!${NC}"
+ echo -e "${GREEN}Update Complete!${END}"
  clean
 }
 export -f update
@@ -566,23 +566,23 @@ pki-details() {
   local file="$1"
   [[ ! -s "$file" ]] && return 0
 
-  local type="Unknown" cn="N/A" issued="N/A" expiry="N/A" days_left="N/A" issuer="N/A" sha256="N/A" md5="N/A" color="${B}"
-  local protected="${G}No${NC}"
+  local type="Unknown" cn="N/A" issued="N/A" expiry="N/A" days_left="N/A" issuer="N/A" sha256="N/A" md5="N/A" color="${BLUE}"
+  local protected="${GREEN}No${END}"
   local abs_path=$(readlink -f "$file" 2>/dev/null || echo "$file")
   local filename=$(basename "$file")
 
   # 1. Content Detection
   if grep -q "BEGIN PKCS12" "$file" 2>/dev/null || [[ "$file" == *.p12 ]] || [[ "$file" == *.pfx ]]; then
    type="P12 Container"
-   color="${Y}"
-   if ! openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null >/dev/null; then protected="${R}Yes (Encrypted)${NC}"; fi
+   color="${YELLOW}"
+   if ! openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null >/dev/null; then protected="${RED}Yes (Encrypted)${END}"; fi
    cn=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
    expiry=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -dates 2>/dev/null | grep "notAfter" | cut -d= -f2)
    sha256=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)
    md5=$(openssl pkcs12 -in "$file" -nokeys -passin pass:'' 2>/dev/null | openssl x509 -noout -fingerprint -md5 2>/dev/null | cut -d= -f2)
   elif grep -q "CERTIFICATE REQUEST" "$file" 2>/dev/null; then
    type="CSR"
-   color="${M}"
+   color="${GRAY}"
    cn=$(openssl req -in "$file" -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/.*CN=\([^,]*\).*/\1/')
   elif grep -q "BEGIN CERTIFICATE" "$file" 2>/dev/null; then
    local count=$(grep -c "BEGIN CERTIFICATE" "$file")
@@ -606,12 +606,12 @@ pki-details() {
    fi
   elif grep -q "PRIVATE KEY" "$file" 2>/dev/null; then
    type="Private Key"
-   color="${R}"
+   color="${RED}"
    cn="[SECRET]"
-   if grep -qE "ENCRYPTED|Proc-Type: 4,ENCRYPTED" "$file"; then protected="${R}Yes (Encrypted)${NC}"; fi
+   if grep -qE "ENCRYPTED|Proc-Type: 4,ENCRYPTED" "$file"; then protected="${RED}Yes (Encrypted)${END}"; fi
   elif grep -q "BEGIN PUBLIC KEY" "$file" 2>/dev/null; then
    type="Public Key"
-   color="${G}"
+   color="${GREEN}"
   else return 0; fi
 
   # 2. Date Logic
@@ -621,10 +621,10 @@ pki-details() {
     local now=$(date +%s)
     local diff=$(((exp_s - now) / 86400))
     if [[ $diff -lt 0 ]]; then
-     days_left="${R}EXPIRED (${diff#-} days ago)${NC}"
+     days_left="${RED}EXPIRED (${diff#-} days ago)${END}"
     elif [[ $diff -lt 30 ]]; then
-     days_left="${Y}$diff days (URGENT)${NC}"
-    else days_left="${G}$diff days${NC}"; fi
+     days_left="${YELLOW}$diff days (URGENT)${END}"
+    else days_left="${GREEN}$diff days${END}"; fi
    fi
   fi
 
@@ -666,10 +666,10 @@ pki-details() {
        local now=$(date +%s)
        local diff=$(((exp_s - now) / 86400))
        if [[ $diff -lt 0 ]]; then
-        d_left="${R}EXPIRED (${diff#-} days ago)${NC}"
+        d_left="${RED}EXPIRED (${diff#-} days ago)${END}"
        elif [[ $diff -lt 30 ]]; then
-        d_left="${Y}$diff days (URGENT)${NC}"
-       else d_left="${G}$diff days${NC}"; fi
+        d_left="${YELLOW}$diff days (URGENT)${END}"
+       else d_left="${GREEN}$diff days${END}"; fi
       fi
      fi
 
@@ -702,22 +702,22 @@ pki-details() {
 
   # 5. Draw
   local dash=$(printf '─%.0s' $(seq 1 $max_w))
-  printf "${color}┌%s┐${NC}\n" "$dash"
+  printf "${color}┌%s┐${END}\n" "$dash"
 
   # Center Header
   local h_pad=$(((max_w - ${#filename}) / 2))
-  printf "${color}│${NC}%*s%s%*s${color}│${NC}\n" "$h_pad" "" "$filename" "$((max_w - h_pad - ${#filename}))" ""
+  printf "${color}│${END}%*s%s%*s${color}│${END}\n" "$h_pad" "" "$filename" "$((max_w - h_pad - ${#filename}))" ""
 
-  printf "${color}├%s┤${NC}\n" "$dash"
+  printf "${color}├%s┤${END}\n" "$dash"
 
   # Rows with precise trailing space calculation
   for r in "${rows[@]}"; do
    local cur_w=$(_vwidth "$r")
    local gap=$((max_w - cur_w))
-   printf "%b%*s ${color}│${NC}\n" "$r" "$gap" ""
+   printf "%b%*s ${color}│${END}\n" "$r" "$gap" ""
   done
 
-  printf "${color}└%s┘${NC}\n\n" "$dash"
+  printf "${color}└%s┘${END}\n\n" "$dash"
  }
 
  # --- Argument & Paging Logic ---
@@ -732,7 +732,7 @@ pki-details() {
    local f1="$2" f2="$3"
    local m1=$(openssl x509 -noout -modulus -in "$f1" 2>/dev/null || openssl rsa -noout -modulus -in "$f1" 2>/dev/null || openssl req -noout -modulus -in "$f1" 2>/dev/null)
    local m2=$(openssl x509 -noout -modulus -in "$f2" 2>/dev/null || openssl rsa -noout -modulus -in "$f2" 2>/dev/null || openssl req -noout -modulus -in "$f2" 2>/dev/null)
-   [[ "$m1" == "$m2" && -n "$m1" ]] && printf "${G}MATCH!${NC}\n" || printf "${R}MISMATCH${NC}\n"
+   [[ "$m1" == "$m2" && -n "$m1" ]] && printf "${GREEN}MATCH!${END}\n" || printf "${RED}MISMATCH${END}\n"
    ;;
   *)
    local tmp=$(mktemp)
@@ -1014,31 +1014,31 @@ function minikube-start {
  local ADDON_LIST=()
 
  for addon in "${OFFER_LIST[@]}"; do
-  read -p "Turn on addon ${GREEN}$addon${NC} ? (y/n) : " answer
+  read -p "Turn on addon ${GREEN}$addon${END} ? (y/n) : " answer
   if [[ "$answer" == "y" ]]; then
-   echo -e " Activating addon ${GREEN}$addon...${NC}"
+   echo -e " Activating addon ${GREEN}$addon...${END}"
    ADDON_LIST+=("$addon")
   else
-   echo -e " ${LIGHT_GRAY}Skipping addon $addon...${NC}"
+   echo -e " ${LIGHT_GRAY}Skipping addon $addon...${END}"
   fi
  done
 
  local ADDONS=$(IFS=,; echo "${ADDONS_LIST[*]}")
 
  minikube config set driver "$DRIVER"
- echo -e "Setting default driver to ${HIGH_WHITE}$DRIVER${NC}"
+ echo -e "Setting default driver to ${HIGH_WHITE}$DRIVER${END}"
 
  minikube config set kubernetes-version "$K8_VERSION"
- echo -e "Setting kubernetes version to ${HIGH_WHTIE}$K8_VERSION${NC}"
+ echo -e "Setting kubernetes version to ${HIGH_WHTIE}$K8_VERSION${END}"
 
  minikube config set cpus "$CPUS"
- echo -e "Setting CPUs ${HIGH_WHTIE}$CPUS${NC}"
+ echo -e "Setting CPUs ${HIGH_WHTIE}$CPUS${END}"
 
  minikube config set memory "$MEMORY"
- echo -e "Setting Memory ${HIGH_WHTIE}$MEMORY${NC}"
+ echo -e "Setting Memory ${HIGH_WHTIE}$MEMORY${END}"
 
  minikube config set disk-size "$DISK_SIZE"
- echo -e "Setting Disk-Size ${HIGH_WHTIE}$DISK_SIZE${NC}"
+ echo -e "Setting Disk-Size ${HIGH_WHTIE}$DISK_SIZE${END}"
 
  minikube start --addons="$ADDONS"
 }
