@@ -1,14 +1,10 @@
 #!/bin/bash
 
-if [[ -n "${__BASH_PACKAGES__:-}" ]]; then
- return 0
-fi
+#if [[ -n "${__PACKAGES_INIT__:-}" ]]; then
+# return 0
+#fi
 
-if [[ -n "${__PACKAGES_INIT__:-}" ]]; then
- return 0
-fi
-
-__BASH_PACKAGES__=1
+#__PACKAGES_PACKAGES__=1
 
 # Global variables
 SCRIPT_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -163,7 +159,7 @@ packages=(
  "gparted"
  "chromium"
  "inotify-tools"
- "neofetch"
+ "fastfetch"
  "flatpak"
  "gnome-software-plugin-flatpak"
  "imagemagick"
@@ -354,13 +350,16 @@ if ! flatpak list 2>/dev/null | grep -q "com.vixalien.sticky"; then
  flatpak install flathub com.vixalien.sticky -y
 fi
 
-# Install LazyDocker
+
+########## LazyDocker #############
+
 if ! command -v lazydocker >/dev/null 2>&1; then
  echo "Installing lazydocker..."
  curl https://raw.githubusercontent.com/jesseduffield/lazydocker/master/scripts/install_update_linux.sh | bash
 fi
 
-# Install K9
+########## K9s #############
+
 if ! command -v k9s >/dev/null 2>&1; then
  K9S_VERSION="v0.32.5"
  echo "Installing k9s..."
@@ -371,25 +370,33 @@ if ! command -v k9s >/dev/null 2>&1; then
  rm -rf "$TMP_DIR"
 fi
 
+
+########## Minikube #############
+
 # Fetch the latest minikube version tag (e.g., v1.32.0)
-LATEST_MINIKUBE_VERSION=$(curl -s https://storage.googleapis.com/minikube/releases/latest/minikube-version)
+LATEST_MINIKUBE_VERSION=$(curl -s https://api.github.com/repos/kubernetes/minikube/releases/latest | jq -r .tag_name)
 
 # Helper function to handle the download and install process
 install_minikube() {
+
  echo "Installing minikube ${LATEST_MINIKUBE_VERSION}..."
- curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-amd64
+ curl -LO "https://github.com/kubernetes/minikube/releases/download/${LATEST_MINIKUBE_VERSION}/minikube-linux-amd64"
+
  sudo install minikube-linux-amd64 /usr/local/bin/minikube
- rm minikube-linux-amd64
+ rm minikube-linux-amd64 
+
  echo "Minikube setup complete!"
 }
 
 # Check if minikube is installed
 if ! command -v minikube >/dev/null 2>&1; then
+
  echo "Minikube is not installed."
  install_minikube
-else
- # Get the current installed version
- LOCAL_MINIKUBE_VERSION=$(minikube version --short)
+
+ else
+  # Get the current installed version
+  LOCAL_MINIKUBE_VERSION=$(minikube version --short)
 
  # Compare local version with latest version
  if [ "$LOCAL_MINIKUBE_VERSION" != "$LATEST_MINIKUBE_VERSION" ]; then
@@ -400,7 +407,39 @@ else
  fi
 fi
 
-# Center Windows
+########## Kubectl #############
+
+# Fetch the latest kubectl version tag (e.g., v1.30.0)
+LATEST_KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+
+# Helper function to handle the download and install process
+install_kubectl() {
+ echo "Installing/Updating kubectl ${LATEST_KUBECTL_VERSION}..."
+ curl -LO "https://dl.k8s.io/release/${LATEST_KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+ sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+ rm kubectl
+ echo "kubectl setup complete!"
+}
+
+# Check if kubectl is installed
+if ! command -v kubectl >/dev/null 2>&1; then
+ echo "kubectl is not installed."
+ install_kubectl
+else
+ # Get the current installed version
+ LOCAL_KUBECTL_VERSION=$(kubectl version --client 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+
+ # Compare local version with latest version
+ if [[ "$LOCAL_KUBECTL_VERSION" != "$LATEST_KUBECTL_VERSION" ]]; then
+  echo "kubectl update available! (Local: $LOCAL_KUBECTL_VERSION -> Latest: $LATEST_KUBECTL_VERSION)"
+  install_kubectl
+ else
+  echo "kubectl is already up to date ($LOCAL_KUBECTL_VERSION)."
+ fi
+fi
+
+########## Gnome Settings : Window Centering #############
+
 echo "Configuring GNOME Window settings..."
 if command -v gsettings >/dev/null 2>&1; then
  centered=$(gsettings get org.gnome.mutter center-new-windows)
@@ -410,7 +449,9 @@ if command -v gsettings >/dev/null 2>&1; then
  fi
 fi
 
-# Update package manager
+
+########## Package Manger : Update packages #############
+
 sudo apt update -y && sudo apt upgrade -y
 
 echo "--- ✨ Setup Complete! ---"

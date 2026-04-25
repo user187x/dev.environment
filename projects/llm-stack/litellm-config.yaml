@@ -1,0 +1,21 @@
+model_list:
+  - model_name: gemma
+    litellm_params:
+      model: vllm/google/gemma-2-2b-it
+      api_base: http://vllm-svc:8000/v1
+  - model_name: phi-mini
+    litellm_params:
+      model: vllm/microsoft/phi-4-mini
+      api_base: http://vllm-svc:8000/v1
+  - model_name: llama-tiny
+    litellm_params:
+      model: vllm/meta-llama/Llama-3.2-1B-Instruct
+      api_base: http://vllm-svc:8000/v1
+  - model_name: qwen-coder
+    litellm_params:
+      model: vllm/Qwen/Qwen2.5-Coder-7B-Instruct
+      api_base: http://vllm-svc:8000/v1
+  - model_name: mistral
+    litellm_params:
+      model: vllm/mistralai/Mistral-7B-Instruct-v0.3
+      api_base: http://vllm-svc:8000/v1
