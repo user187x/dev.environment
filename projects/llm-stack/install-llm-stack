@@ -1,10 +1,5 @@
 #!/bin/bash
 
-# FIX 1: Exit immediately on any error, treat unset variables as errors,
-# and propagate pipe failures. Without this the script happily continues
-# past a failed kubectl/helm call and deploys against a broken cluster.
-set -euo pipefail
-
 # --- Configuration ---
 NAMESPACE="llm-ops"
 DOMAIN="llm.local"
@@ -16,15 +11,77 @@ MODELS=(
   "mistralai/Mistral-7B-Instruct-v0.3"
 )
 
-echo "🚀 Starting Full Cluster Provisioning..."
+# ---------------------------------------------------------------------------
+# STEP 0: Detect or prompt for device mode (GPU vs CPU)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=============================================="
+echo "  LLM Stack — Device Configuration"
+echo "=============================================="
+echo ""
 
+# Auto-detect GPUs available in the cluster
+DETECTED_GPU_COUNT=$(kubectl get nodes \
+  -o custom-columns="GPU:.status.capacity.nvidia\.com/gpu" \
+  --no-headers 2>/dev/null \
+  | grep -v "<none>" | grep -v "^$" | awk '{sum+=$1} END {print sum+0}')
+
+if [[ "$DETECTED_GPU_COUNT" -gt 0 ]]; then
+  echo "✅ Auto-detected ${DETECTED_GPU_COUNT} NVIDIA GPU(s) across cluster nodes."
+  echo ""
+fi
+
+echo "Select compute device for vLLM:"
+echo "  [1] NVIDIA GPU  (requires NVIDIA device plugin + GPU nodes)"
+echo "  [2] CPU only    (no GPU required, slower inference)"
+echo ""
+read -rp "Enter choice [1 or 2]: " DEVICE_CHOICE
+
+case "$DEVICE_CHOICE" in
+  1)
+    DEVICE_MODE="gpu"
+    echo ""
+    echo "🖥️  GPU mode selected."
+
+    # Ensure the NVIDIA device plugin is installed
+    echo "🔌 Checking NVIDIA device plugin..."
+    if ! kubectl get daemonset nvidia-device-plugin-daemonset \
+        -n kube-system &>/dev/null; then
+      echo "   Not found — installing NVIDIA device plugin..."
+      kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.17.0/deployments/static/nvidia-device-plugin.yml
+      echo "   Waiting for device plugin to become ready..."
+      kubectl rollout status daemonset/nvidia-device-plugin-daemonset \
+        -n kube-system --timeout=120s
+    else
+      echo "   Already installed ✓"
+    fi
+    ;;
+  2)
+    DEVICE_MODE="cpu"
+    echo ""
+    echo "🖥️  CPU-only mode selected."
+    ;;
+  *)
+    echo "❌ Invalid choice. Please run the script again and enter 1 or 2."
+    exit 1
+    ;;
+esac
+
+echo ""
+echo "🚀 Starting Full Cluster Provisioning (mode: ${DEVICE_MODE^^})..."
+echo ""
+
+# ---------------------------------------------------------------------------
 # 1. Install Helm
+# ---------------------------------------------------------------------------
 if ! command -v helm &>/dev/null; then
   echo "📦 Installing Helm..."
   curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 fi
 
+# ---------------------------------------------------------------------------
 # 2. Add Required Helm Repos
+# ---------------------------------------------------------------------------
 echo "📦 Adding Helm Repositories..."
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 helm repo add vllm https://vllm-project.github.io/production-stack
@@ -32,26 +89,36 @@ helm repo add vllm https://vllm-project.github.io/production-stack
 # LiteLLM's chart is OCI-based and installed directly — no repo add needed.
 helm repo update
 
+# ---------------------------------------------------------------------------
 # 3. Setup Namespace
+# ---------------------------------------------------------------------------
 kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
 
+# ---------------------------------------------------------------------------
 # 4. Install Nginx Ingress Controller
+# ---------------------------------------------------------------------------
 echo "🌐 Installing Nginx Ingress..."
 helm upgrade --install ingress-nginx ingress-nginx \
   --repo https://kubernetes.github.io/ingress-nginx \
   --namespace ingress-nginx --create-namespace \
   --set controller.service.type=LoadBalancer
 
+# ---------------------------------------------------------------------------
 # 5. Install vLLM Production Stack (includes LMCache)
+# ---------------------------------------------------------------------------
 # FIX 3: The lmcache.github.io helm repo no longer exists. LMCache is now
 # distributed as part of the vLLM production-stack project.
 # FIX 4: --set cannot correctly express nested array objects like modelSpec[].
 # The chart requires repository and tag as mandatory fields alongside modelURL,
 # so all modelSpec values must be supplied together via a values file.
 echo "🧠 Installing vLLM Production Stack (with LMCache)..."
-cat <<EOF > vllm-values.yaml
+
+if [[ "$DEVICE_MODE" == "gpu" ]]; then
+  cat <<EOF > vllm-values.yaml
 servingEngineSpec:
-  runtimeClassName: ""
+  # runtimeClassName "nvidia" exposes the NVIDIA device plugin to the pod,
+  # which is required for GPU scheduling on most clusters.
+  runtimeClassName: "nvidia"
   modelSpec:
     - name: "vllm-engine"
       repository: "vllm/vllm-openai"
@@ -66,57 +133,77 @@ servingEngineSpec:
         extraArgs: ["--gpu-memory-utilization", "0.5", "--enforce-eager"]
 EOF
 
+else
+  cat <<EOF > vllm-values.yaml
+servingEngineSpec:
+  # runtimeClassName is empty for CPU-only clusters — no GPU runtime needed.
+  runtimeClassName: ""
+  modelSpec:
+    - name: "vllm-engine"
+      repository: "vllm/vllm-openai"
+      tag: "latest"
+      modelURL: "${MODELS[0]}"
+      replicaCount: 1
+      requestCPU: 6
+      requestMemory: "16Gi"
+      # requestGPU: 0 — omitted entirely so the scheduler does not look for
+      # a GPU resource that does not exist on CPU-only nodes.
+      requestGPU: 0
+      vllmConfig:
+        maxModelLen: 2048
+        # --device cpu  tells vLLM to skip CUDA detection entirely.
+        # --enforce-eager disables CUDA graph capture (N/A on CPU).
+        extraArgs: ["--device", "cpu", "--enforce-eager"]
+EOF
+
+fi
+
 helm upgrade --install vllm-stack vllm/vllm-stack \
   --namespace $NAMESPACE --create-namespace \
   --values vllm-values.yaml
 
-# 6. Configure and Install LiteLLM Proxy
-echo "⚖️ Deploying LiteLLM Router..."
-cat <<EOF > litellm-config.yaml
-model_list:
-  - model_name: gemma
-    litellm_params:
-      # FIX 5: Use the 'openai/' prefix, not 'vllm/'. The 'vllm/' prefix
-      # invokes LiteLLM's native vLLM SDK integration (Python subprocess).
-      # Since vLLM is already running an OpenAI-compatible REST server,
-      # LiteLLM must treat it as a generic OpenAI endpoint via the 'openai/'
-      # prefix combined with api_base.
-      model: openai/${MODELS[0]}
-      # FIX 6: Point to the vllm-stack router service, not the old vllm-svc.
-      # The production-stack chart exposes a router on port 80 that
-      # load-balances across all vLLM engine pods.
-      api_base: http://vllm-stack-router-service:80/v1
-EOF
-
-kubectl create configmap litellm-config \
-  --from-file=litellm-config.yaml \
-  -n $NAMESPACE \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-# FIX 7: https://berriai.github.io/litellm is not a valid Helm index and the
+# ---------------------------------------------------------------------------
+# 6. Install LiteLLM Proxy
+# ---------------------------------------------------------------------------
+# FIX 5: The previous approach of manually creating a ConfigMap and mounting
+# it via extraVolumes/extraVolumeMounts is not supported by the litellm-helm
+# chart — those fields don't exist — so /app/config.yaml was never actually
+# written into the pod, causing the "Config file not found" crash.
+#
+# The correct approach is the chart's own 'proxy_config' key. When
+# proxyConfigMap.create=true (the default), the chart renders proxy_config
+# into a ConfigMap and mounts it at /app/config.yaml automatically.
+#
+# FIX 6: https://berriai.github.io/litellm is not a valid Helm index and the
 # chart is not named 'litellm'. The official chart is OCI-hosted at
 # oci://ghcr.io/berriai/litellm-helm and must be referenced by that full path.
+echo "⚖️ Deploying LiteLLM Router..."
+
 helm upgrade --install litellm-proxy oci://ghcr.io/berriai/litellm-helm \
   --namespace $NAMESPACE \
   --values - <<EOF
-image:
-  repository: ghcr.io/berriai/litellm
-extraVolumes:
-- name: config-volume
-  configMap:
-    name: litellm-config
-extraVolumeMounts:
-- name: config-volume
-  mountPath: /app/config.yaml
-  # FIX 8: subPath is required when mounting a ConfigMap to a *file* path.
-  # Without it Kubernetes replaces the entire /app directory with a
-  # directory named "config.yaml" containing each ConfigMap key as a file,
-  # so '--config=/app/config.yaml' gets a directory instead of a YAML file.
-  subPath: litellm-config.yaml
-args: ["--config=/app/config.yaml"]
+proxyConfigMap:
+  create: true
+
+proxy_config:
+  model_list:
+    - model_name: gemma
+      litellm_params:
+        # FIX 7: Use the 'openai/' prefix, not 'vllm/'. The 'vllm/' prefix
+        # invokes LiteLLM's native vLLM SDK integration (Python subprocess).
+        # Since vLLM is already running an OpenAI-compatible REST server,
+        # LiteLLM must treat it as a generic OpenAI endpoint via the 'openai/'
+        # prefix combined with api_base.
+        model: openai/${MODELS[0]}
+        # FIX 8: Point to the vllm-stack router service, not the old vllm-svc.
+        # The production-stack chart exposes a router on port 80 that
+        # load-balances across all vLLM engine pods.
+        api_base: http://vllm-stack-router-service:80/v1
 EOF
 
+# ---------------------------------------------------------------------------
 # 7. Ingress Configuration
+# ---------------------------------------------------------------------------
 echo "🔗 Finalizing Network Routing..."
 cat <<EOF | kubectl apply -f -
 apiVersion: networking.k8s.io/v1
@@ -143,7 +230,10 @@ spec:
               number: 4000
 EOF
 
+echo ""
 echo "------------------------------------------------"
 echo "✅ SUCCESS: All components deployed."
-echo "Entrypoint: http://$DOMAIN"
+echo "   Device mode : ${DEVICE_MODE^^}"
+echo "   Model       : ${MODELS[0]}"
+echo "   Entrypoint  : http://$DOMAIN"
 echo "------------------------------------------------"
