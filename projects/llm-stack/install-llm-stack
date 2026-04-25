@@ -1,12 +1,16 @@
 #!/bin/bash
 
+# FIX 1: Exit immediately on any error, treat unset variables as errors,
+# and propagate pipe failures. Without this the script happily continues
+# past a failed kubectl/helm call and deploys against a broken cluster.
+set -euo pipefail
+
 # --- Configuration ---
 NAMESPACE="llm-ops"
 DOMAIN="llm.local"
-# Top 5 Laptop-Friendly Models
 MODELS=(
-  "google/gemma-2-2b-it" 
-  "microsoft/phi-4-mini" 
+  "google/gemma-2-2b-it"
+  "microsoft/phi-4-mini"
   "meta-llama/Llama-3.2-1B-Instruct"
   "Qwen/Qwen2.5-Coder-7B-Instruct"
   "mistralai/Mistral-7B-Instruct-v0.3"
@@ -14,16 +18,18 @@ MODELS=(
 
 echo "🚀 Starting Full Cluster Provisioning..."
 
-# 1. Install Helm (if missing)
-if ! command -v helm &> /dev/null; then
-    echo "📦 Installing Helm..."
-    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+# 1. Install Helm
+if ! command -v helm &>/dev/null; then
+  echo "📦 Installing Helm..."
+  curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 fi
 
 # 2. Add Required Helm Repos
 echo "📦 Adding Helm Repositories..."
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm repo add litellm https://berriai.github.io/litellm
+helm repo add vllm https://vllm-project.github.io/production-stack
+# FIX 2: https://berriai.github.io/litellm is not a valid Helm repo index.
+# LiteLLM's chart is OCI-based and installed directly — no repo add needed.
 helm repo update
 
 # 3. Setup Namespace
@@ -36,95 +42,61 @@ helm upgrade --install ingress-nginx ingress-nginx \
   --namespace ingress-nginx --create-namespace \
   --set controller.service.type=LoadBalancer
 
-# 5. Install LMCache (The KV Cache Layer)
-echo "🧠 Installing LMCache Operator..."
-kubectl apply -f https://raw.githubusercontent.com/LMCache/LMCache/main/kubernetes/operator.yaml
-
-cat <<EOF | kubectl apply -f -
-apiVersion: lmcache.ai/v1alpha1
-kind: LMCacheEngine
-metadata:
-  name: lmcache-server
-  namespace: $NAMESPACE
-spec:
-  l1_cache:
-    sizeGB: 4 # Small for laptop use
-  image:
-    repository: lmcache/lmcache-server
-    tag: latest
+# 5. Install vLLM Production Stack (includes LMCache)
+# FIX 3: The lmcache.github.io helm repo no longer exists. LMCache is now
+# distributed as part of the vLLM production-stack project.
+# FIX 4: --set cannot correctly express nested array objects like modelSpec[].
+# The chart requires repository and tag as mandatory fields alongside modelURL,
+# so all modelSpec values must be supplied together via a values file.
+echo "🧠 Installing vLLM Production Stack (with LMCache)..."
+cat <<EOF > vllm-values.yaml
+servingEngineSpec:
+  runtimeClassName: ""
+  modelSpec:
+    - name: "vllm-engine"
+      repository: "vllm/vllm-openai"
+      tag: "latest"
+      modelURL: "${MODELS[0]}"
+      replicaCount: 1
+      requestCPU: 6
+      requestMemory: "16Gi"
+      requestGPU: 1
+      vllmConfig:
+        maxModelLen: 2048
+        extraArgs: ["--gpu-memory-utilization", "0.5", "--enforce-eager"]
 EOF
 
-# 6. Install vLLM (Configured for Low VRAM)
-echo "🤖 Deploying vLLM (Gemma-2-2b)..."
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: vllm-engine
-  namespace: $NAMESPACE
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: vllm
-  template:
-    metadata:
-      labels:
-        app: vllm
-    spec:
-      containers:
-      - name: vllm-container
-        image: vllm/vllm-openai:latest
-        args: [
-          "--model", "${MODELS[0]}",
-          "--gpu-memory-utilization", "0.5",
-          "--max-model-len", "2048",
-          "--enforce-eager"
-        ]
-        ports:
-        - containerPort: 8000
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: vllm-svc
-  namespace: $NAMESPACE
-spec:
-  ports:
-  - port: 8000
-  selector:
-    app: vllm
-EOF
+helm upgrade --install vllm-stack vllm/vllm-stack \
+  --namespace $NAMESPACE --create-namespace \
+  --values vllm-values.yaml
 
-# 7. Configure and Install LiteLLM Proxy
+# 6. Configure and Install LiteLLM Proxy
 echo "⚖️ Deploying LiteLLM Router..."
 cat <<EOF > litellm-config.yaml
 model_list:
   - model_name: gemma
     litellm_params:
-      model: vllm/${MODELS[0]}
-      api_base: http://vllm-svc:8000/v1
-  - model_name: phi-mini
-    litellm_params:
-      model: vllm/${MODELS[1]}
-      api_base: http://vllm-svc:8000/v1
-  - model_name: llama-tiny
-    litellm_params:
-      model: vllm/${MODELS[2]}
-      api_base: http://vllm-svc:8000/v1
-  - model_name: qwen-coder
-    litellm_params:
-      model: vllm/${MODELS[3]}
-      api_base: http://vllm-svc:8000/v1
-  - model_name: mistral
-    litellm_params:
-      model: vllm/${MODELS[4]}
-      api_base: http://vllm-svc:8000/v1
+      # FIX 5: Use the 'openai/' prefix, not 'vllm/'. The 'vllm/' prefix
+      # invokes LiteLLM's native vLLM SDK integration (Python subprocess).
+      # Since vLLM is already running an OpenAI-compatible REST server,
+      # LiteLLM must treat it as a generic OpenAI endpoint via the 'openai/'
+      # prefix combined with api_base.
+      model: openai/${MODELS[0]}
+      # FIX 6: Point to the vllm-stack router service, not the old vllm-svc.
+      # The production-stack chart exposes a router on port 80 that
+      # load-balances across all vLLM engine pods.
+      api_base: http://vllm-stack-router-service:80/v1
 EOF
 
-kubectl create configmap litellm-config --from-file=litellm-config.yaml -n $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+kubectl create configmap litellm-config \
+  --from-file=litellm-config.yaml \
+  -n $NAMESPACE \
+  --dry-run=client -o yaml | kubectl apply -f -
 
-helm upgrade --install litellm-proxy litellm/litellm \
+# FIX 7: https://berriai.github.io/litellm is not a valid Helm index and the
+# chart is not named 'litellm'. The official chart is OCI-hosted at
+# oci://ghcr.io/berriai/litellm-helm and must be referenced by that full path.
+helm upgrade --install litellm-proxy oci://ghcr.io/berriai/litellm-helm \
   --namespace $NAMESPACE \
   --values - <<EOF
 image:
@@ -136,10 +108,15 @@ extraVolumes:
 extraVolumeMounts:
 - name: config-volume
   mountPath: /app/config.yaml
+  # FIX 8: subPath is required when mounting a ConfigMap to a *file* path.
+  # Without it Kubernetes replaces the entire /app directory with a
+  # directory named "config.yaml" containing each ConfigMap key as a file,
+  # so '--config=/app/config.yaml' gets a directory instead of a YAML file.
+  subPath: litellm-config.yaml
 args: ["--config=/app/config.yaml"]
 EOF
 
-# 8. Final Step: Ingress Configuration
+# 7. Ingress Configuration
 echo "🔗 Finalizing Network Routing..."
 cat <<EOF | kubectl apply -f -
 apiVersion: networking.k8s.io/v1
@@ -147,9 +124,12 @@ kind: Ingress
 metadata:
   name: llm-gateway
   namespace: $NAMESPACE
-  annotations:
-    kubernetes.io/ingress.class: nginx
+  # FIX 9: The 'kubernetes.io/ingress.class' annotation was deprecated in
+  # k8s 1.18 and fully removed in 1.22. The nginx ingress controller ignores
+  # it on modern clusters, so traffic never reaches LiteLLM. Use the
+  # spec.ingressClassName field instead.
 spec:
+  ingressClassName: nginx
   rules:
   - host: $DOMAIN
     http:
@@ -158,7 +138,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: litellm-proxy
+            name: litellm-proxy-litellm-helm
             port:
               number: 4000
 EOF
@@ -166,5 +146,4 @@ EOF
 echo "------------------------------------------------"
 echo "✅ SUCCESS: All components deployed."
 echo "Entrypoint: http://$DOMAIN"
-echo "Components: Nginx -> LiteLLM -> vLLM (w/ LMCache)"
 echo "------------------------------------------------"
