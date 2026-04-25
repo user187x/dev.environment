@@ -30,19 +30,19 @@ RESOURCE_PATH["VIM_SRC"]="$DEV_HOME/vim"
 RESOURCE_PATH["VIM_DST"]="$HOME/.vim"
 
 # Colors for logging
-readonly END='\e[0m'
-readonly GREEN='\e[92m'
-readonly BLUE='\e[34m'
-readonly PURPLE='\e[35m'
-readonly YELLOW='\e[93m'
-readonly RED='\e[91m'
-readonly GRAY='\e[90m'
-readonly WHITE='\e[97m'
+GREEN='\e[92m'
+BLUE='\e[34m'
+PURPLE='\e[35m'
+YELLOW='\e[93m'
+RED='\e[91m'
+GRAY='\e[90m'
+WHITE='\e[97m'
+END='\e[0m'
 
-readonly WARN="(${YELLOW}*${END})"
-readonly INFO="(${WHITE}i${END})"
-readonly ERROR="(${RED}!${END})"
-readonly QESTN="(${BLUE}?${END})"
+WARN="(${YELLOW}*${END})"
+INFO="(${WHITE}i${END})"
+ERROR="(${RED}!${END})"
+QESTN="(${BLUE}?${END})"
 
 # ==========================================
 # Utility Functions

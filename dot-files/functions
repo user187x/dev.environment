@@ -7,20 +7,14 @@
 __BASH_FUNCTIONS__=1
 
 # Define global colors for consistency across functions
-readonly RED='\e[1;91m' # Red
-readonly GREEN='\e[1;92m' # Green
-readonly YELLOW='\e[1;93m' # Yellow
-readonly BLUE='\e[1;94m' # Blue
-readonly GRAY='\e[3;90m' # Muted/Grey
-readonly END='\e[0m'   # No Color
- 
-readonly HIGH_WHITE=$'\e[1;97m'
-readonly LIGHT_GRAY=$'\e[0;37m'
-
-# Might have to use to properly reference color
-#readonly RED=$'\e[0;31m'    # Red color code
-#readonly GREEN=$'\e[0;32m'  # Green color code
-#readonly NC=$'\e[0m'        # No Color (reset) code
+RED='\e[1;91m' # Red
+GREEN='\e[1;92m' # Green
+YELLOW='\e[1;93m' # Yellow
+BLUE='\e[1;94m' # Blue
+GRAY='\e[3;90m' # Muted/Grey
+END='\e[0m'   # No Color 
+HIGH_WHITE=$'\e[1;97m'
+LIGHT_GRAY=$'\e[0;37m'
 
 ############################################
 # UTILITY FUNCTIONS
@@ -221,7 +215,7 @@ function terminal-depth {
 
 }
 
-export -f terminal_depth
+export -f terminal-depth
 
 function fz {
 
@@ -561,7 +555,6 @@ export -f list-fonts
 
 function pki-details {
 
- local G='\033[1;92m' R='\033[1;91m' Y='\033[1;93m' B='\033[1;94m' M='\033[3;90m' NC='\033[0m'
  local save_mode=false
 
  # Helper to get visible width (strips ANSI codes)
@@ -1031,7 +1024,7 @@ function minikube-start {
  echo -e "Setting default driver to ${HIGH_WHITE}$DRIVER${END}"
 
  minikube config set kubernetes-version "$K8_VERSION"
- echo -e "Setting kubernetes version to ${HIGH_WHTIE}$K8_VERSION${END}"
+ echo -e "Setting kubernetes version to ${HIGH_WHITE}$K8_VERSION${END}"
 
  minikube config set cpus "$CPUS"
  echo -e "Setting CPUs ${HIGH_WHTIE}$CPUS${END}"
