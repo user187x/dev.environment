@@ -1,0 +1,14 @@
+#!/bin/bash
+
+read -e -r -p "Enter path to appimage: " location
+read -r -p "Extract contents? (y/n)" extract
+
+if [[ "$extract" == "y" ]]; then
+ "$location" --appimage-extract
+
+ read -r -p "Search for app icons associated with app?: (y/n) " search
+ if [[ "$search" == "y" ]]; then
+  find "$location" -name "*.png" -o -name "*.svg" | grep -i lm
+ fi
+fi
+
