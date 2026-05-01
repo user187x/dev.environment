@@ -30,33 +30,35 @@ RESOURCE_PATH["VIM_SRC"]="$DEV_HOME/vim"
 RESOURCE_PATH["VIM_DST"]="$HOME/.vim"
 
 # Colors for logging
-readonly END='\e[0m'
-readonly GREEN='\e[92m'
-readonly BLUE='\e[34m'
-readonly PURPLE='\e[35m'
-readonly YELLOW='\e[93m'
-readonly RED='\e[91m'
-readonly GRAY='\e[90m'
-readonly WHITE='\e[97m'
+GREEN='\e[92m'
+BLUE='\e[34m'
+PURPLE='\e[35m'
+YELLOW='\e[93m'
+RED='\e[91m'
+GRAY='\e[90m'
+WHITE='\e[97m'
+END='\e[0m'
 
-readonly WARN="(${YELLOW}*${END})"
-readonly INFO="(${WHITE}i${END})"
-readonly ERROR="(${RED}!${END})"
-readonly QESTN="(${BLUE}?${END})"
+WARN="(${YELLOW}*${END})"
+INFO="(${WHITE}i${END})"
+ERROR="(${RED}!${END})"
+QESTN="(${BLUE}?${END})"
 
 # ==========================================
 # Utility Functions
 # ==========================================
 
 preflight_check() {
+ 
+ echo
+ echo -e "$INFO Checking referential integrity..."
+ echo
 
  for RESOURCE in "${!RESOURCE_PATH[@]}"; do 
   if [[ ! -x "${RESOURCE_PATH[$RESOURCE]}" ]]; then
    echo -e "$ERROR Resource not found: ${YELLOW}$RESOURCE${END}=${WHITE}${RESOURCE_PATH[$RESOURCE]}${END}"
   fi
  done
-
- echo -e "$INFO Referential integrity validated"
 
  # Ensure sudo permissions upfront to prevent timeout
  sudo -v
@@ -117,7 +119,8 @@ install_fonts() {
  echo -e "Installing fonts..."
 
  # Ensure destination directory exists
- mkdir -p ${RESOURCE_PATH["FONT_SRC"]}
+ echo -e "${GRAY}Ensuring desitination path exists :${END} ${WHITE} ${RESOURCE_PATH[FONT_DST]} ${END}"
+ mkdir -p "${RESOURCE_PATH[FONT_DST]}"
 
  echo -e "${GRAY}"
  tar -xvf "${RESOURCE_PATH[FONT_SRC]}/fonts.tar" -C "${RESOURCE_PATH[FONT_DST]}"

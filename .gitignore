@@ -11,3 +11,4 @@ certs/
 src/cinnamon/*.css
 src/gnome-shell/*/*.css
 src/gtk/*/*.css
+dev-tools/resources/

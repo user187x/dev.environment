@@ -1,13 +1,5 @@
 #!/bin/bash
 
-# If not a human/interactively, don't do anything
-case $- in
-*i*) ;;
-*)
- return
- ;;
-esac
-
 # Set system config location
 export XDG_CONFIG_HOME="$HOME/.config"
 

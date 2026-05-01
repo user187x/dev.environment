@@ -1,0 +1,161 @@
+#!/bin/bash
+
+function splitter-combiner {
+
+ local action=""
+ local splits=""
+ local target=""
+ local args=""
+
+ args=$(getopt -o t:s:c -l splits:,combine,target: -- "$@")
+
+ eval set -- "$args"
+
+ while true; do
+  case "$1" in
+  -s | --splits)
+   action="split"
+   splits="$2"
+   shift 2
+   ;;
+  -t | --target)
+   target="$2"
+   shift 2
+   ;;
+  -c | --combine)
+   action="combine"
+   shift
+   ;;
+  --)
+   shift
+   break
+   ;;
+  *)
+   echo "Termianting - Unknown option: $1"
+   exit 1
+   ;;
+  esac
+ done
+
+ if [[ -z "$action" || -z "$target" ]]; then
+  echo "Usage:"
+  echo "  -s|--splits  <N>               Split file into N parts"
+  echo "  -t|--target  <file/directory>  Sets target directory of file to split or combine"
+  echo "  -c|--combine <directory>       Combine parts in directory"
+  exit 1
+ fi
+
+ if [[ "$action" == "split" ]]; then
+  if [[ ! -f "$target" ]]; then
+   echo "Error: File '$target' does not exist or is not a regular file."
+   exit 1
+  fi
+
+  if ! [[ "$splits" =~ ^[0-9]+$ ]] || ((splits < 1)); then
+   echo "Error: -s|--splits requires a positive integer (e.g., -s 10)."
+   exit 1
+  fi
+
+  local dir_name="${target}-parts"
+  
+  local base_name=""
+  base_name="$(basename "$target")"
+
+  mkdir -p "$dir_name"
+
+  echo "Calculating original file checksum..."
+  if command -v pv &>/dev/null; then
+   pv "$target" | sha256sum | awk '{print $1}' >"$dir_name/.checksum"
+  else
+   sha256sum "$target" | awk '{print $1}' >"$dir_name/.checksum"
+  fi
+
+  echo "Splitting '$target' into $splits parts..."
+  split -n "$splits" -a 4 -d "$target" "$dir_name/${base_name}.part"
+
+  echo "Success! Your split files and integrity data are in: $dir_name"
+
+  echo -n "Would you like to delete the original file '$target'? (y/n): "
+  read -r cleanup_confirm
+
+  if [[ "$cleanup_confirm" == "y" || "$cleanup_confirm" == "Y" ]]; then
+   rm "$target"
+   echo "🗑️  Original file deleted!"
+  else
+   echo "📁 Original file kept."
+  fi
+
+ elif [[ "$action" == "combine" ]]; then
+
+  local clean_target="${target%/}"
+
+  if [[ ! -d "$clean_target" ]]; then
+   echo "Error: Directory '$clean_target' does not exist."
+   exit 1
+  fi
+
+  local out_file="${clean_target%-parts}"
+
+  if [[ "$clean_target" == "$out_file" ]]; then
+   out_file="${clean_target}_combined"
+  fi
+
+  if [[ -f "$out_file" ]]; then
+   echo -n "Warning: Output file '$out_file' already exists. Overwrite? (y/n): "
+   read -r confirm
+   if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+    echo "Aborting."
+    exit 1
+   fi
+  fi
+
+  echo "Combining parts from '$clean_target'..."
+
+  if command -v pv &>/dev/null; then
+   pv "$clean_target"/*.part* >"$out_file"
+  else
+   cat "$clean_target"/*.part* >"$out_file"
+  fi
+
+  if [[ -f "$clean_target/.checksum" ]]; then
+
+   echo "Verifying file integrity..."
+   
+   local original_hash=""
+   original_hash=$(cat "$clean_target/.checksum")
+   
+   local new_hash=""
+
+   if command -v pv &>/dev/null; then
+    new_hash=$(pv "$out_file" | sha256sum | awk '{print $1}')
+   else
+    new_hash=$(sha256sum "$out_file" | awk '{print $1}')
+   fi
+
+   if [[ "$original_hash" == "$new_hash" ]]; then
+
+    echo "✅ Integrity check PASSED. File is perfectly restored!"
+    echo "Success! Your combined file is located at: $out_file"
+
+    echo -n "Would you like to delete the parts directory '$clean_target'? (y/n): "
+    read -r cleanup_confirm
+
+    if [[ "$cleanup_confirm" == "y" || "$cleanup_confirm" == "Y" ]]; then
+     rm -rf "$clean_target"
+     echo "🗑️  Parts directory deleted."
+    else
+     echo "📁 Parts directory kept."
+    fi
+
+   else
+    echo "❌ Error: Integrity check FAILED! The combined file does not match the original."
+    exit 1
+   fi
+  else
+   echo "⚠️ Warning: No .checksum file found. Combined successfully, but integrity could not be verified."
+   echo "Your combined file is located at: $out_file"
+  fi
+ fi
+}
+
+splitter-combiner "$@"

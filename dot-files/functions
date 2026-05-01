@@ -12,17 +12,19 @@ GREEN='\e[1;92m' # Green
 YELLOW='\e[1;93m' # Yellow
 BLUE='\e[1;94m' # Blue
 GRAY='\e[3;90m' # Muted/Grey
-END='\e[0m'   # No Color
+END='\e[0m'   # No Color 
+HIGH_WHITE=$'\e[1;97m'
+LIGHT_GRAY=$'\e[0;37m'
 
 ############################################
 # UTILITY FUNCTIONS
 ############################################
 
-now() {
+function now {
  TZ='America/New_York' date +'%I:%M:%S %p'
 }
 
-clock() {
+function clock {
  # 1. Dependency check
  if ! command -v toilet >/dev/null || ! command -v watch >/dev/null; then
   echo -e " ${RED}(!)${END} Dependencies [toilet] and [watch] are required."
@@ -40,7 +42,7 @@ clock() {
 }
 export -f clock
 
-clipboard() {
+function clipboard {
 
  local G='\033[0;92m'
  local R='\033[0;91m'
@@ -106,7 +108,7 @@ clipboard() {
  fi
 }
 
-network_check () {
+function network-check {
 
  if [[ "$#" -gt 0 ]]; then
   read -p "Enter test URL: " url
@@ -127,7 +129,7 @@ network_check () {
 
 }
 
-fmt() {
+function fmt {
  local interactive=false
  local target=""
 
@@ -194,7 +196,7 @@ fmt() {
 }
 
 # Depth of terminal sessions
-terminal_depth() {
+function terminal-depth {
 
  #pstree -p -A -s $$ | \
  #head -n 1 | \
@@ -213,7 +215,7 @@ terminal_depth() {
 
 }
 
-export -f terminal_depth
+export -f terminal-depth
 
 function fz {
 
@@ -386,7 +388,7 @@ function alert {
 # SOUND FUNCTIONS
 ############################################
 
-exit_sound() {
+function exit_sound {
  local sound_file="/opt/audio/Megamanteleport.wav"
  if [[ -f "$sound_file" ]] && command -v mpv >/dev/null; then
   nohup mpv --no-video "$sound_file" >/dev/null 2>&1 &
@@ -398,7 +400,7 @@ exit_sound() {
 # SYSTEM FUNCTIONS                             #
 ################################################
 
-clean() {
+function clean {
  sudo apt clean
  sudo apt autoclean
  sudo apt remove -y
@@ -407,7 +409,7 @@ clean() {
 }
 export -f clean
 
-update() {
+function update {
  sudo apt-get update
  sudo apt update && sudo apt upgrade -y
  echo -e "${GREEN}Update Complete!${END}"
@@ -427,7 +429,7 @@ if command -v grc >/dev/null; then
  ps() { grc sudo ps "$@"; }
 fi
 
-prettyJson() {
+function prettyJson {
  local input="$1"
  if [[ -f "$input" ]]; then
   cat "$input" | jq -C . | less -R
@@ -437,7 +439,7 @@ prettyJson() {
 }
 export -f prettyJson
 
-spin() {
+function spin {
  local message="$1"
  local delay=0.2
  local spinner="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
@@ -449,7 +451,7 @@ spin() {
 }
 export -f spin
 
-play() {
+function play {
  if [[ -f "$1" ]]; then
   mpv --no-video "$1"
  elif [[ -d "$1" ]]; then
@@ -471,10 +473,10 @@ play() {
 export -f play
 
 # Mirror function
-mp3() { play "$@"; }
+function mp3 { play "$@"; }
 export -f mp3
 
-search() {
+function search {
  if [[ -z "$1" ]]; then
   echo "Usage: search <term>"
   return 1
@@ -551,9 +553,8 @@ function list-fonts {
 }
 export -f list-fonts
 
-pki-details() {
+function pki-details {
 
- local G='\033[1;92m' R='\033[1;91m' Y='\033[1;93m' B='\033[1;94m' M='\033[3;90m' NC='\033[0m'
  local save_mode=false
 
  # Helper to get visible width (strips ANSI codes)
@@ -752,7 +753,7 @@ pki-details() {
  _pki_run "$@" | less -R -F -X
 }
 
-pki-analyze() (
+function pki-analyze {
 
  TARGET_DIR="${1:-.}"
 
@@ -994,15 +995,9 @@ pki-analyze() (
 
  # Re-disable nullglob
  shopt -u nullglob
-)
+}
 
 function minikube-start {
-
- local RED=$'\e[0;31m'    # Red color code
- local GREEN=$'\e[0;32m'  # Green color code
- local HIGH_WHITE=$'\e[1;97m'
- local LIGHT_GRAY=$'\e[0;37m'
- local NC=$'\e[0m'        # No Color (reset) code
 
  local DRIVER="docker"
  local K8_VERSION="stable"
@@ -1014,7 +1009,7 @@ function minikube-start {
  local ADDON_LIST=()
 
  for addon in "${OFFER_LIST[@]}"; do
-  read -p "Turn on addon ${GREEN}$addon${END} ? (y/n) : " answer
+  read -r -p "Turn on addon ${GREEN}$addon${END} ? (y/n) : " answer
   if [[ "$answer" == "y" ]]; then
    echo -e " Activating addon ${GREEN}$addon...${END}"
    ADDON_LIST+=("$addon")
@@ -1029,7 +1024,7 @@ function minikube-start {
  echo -e "Setting default driver to ${HIGH_WHITE}$DRIVER${END}"
 
  minikube config set kubernetes-version "$K8_VERSION"
- echo -e "Setting kubernetes version to ${HIGH_WHTIE}$K8_VERSION${END}"
+ echo -e "Setting kubernetes version to ${HIGH_WHITE}$K8_VERSION${END}"
 
  minikube config set cpus "$CPUS"
  echo -e "Setting CPUs ${HIGH_WHTIE}$CPUS${END}"
@@ -1060,12 +1055,12 @@ function minikube-delete-all {
   rm -rf "$HOME/.minikube" > /dev/null 2>&1
   rm -rf "$HOME/.kube" > /dev/null 2>&1
  else
-  read -p "Delete ~/.minikube ? (y/n) : " response
-  if [[ "$resposne" == "y" ]]; then
+  read -r -p "Delete ~/.minikube ? (y/n) : " response
+  if [[ "$response" == "y" ]]; then
    rm -rf "$HOME/.minikube" > /dev/null 2>&1
   fi
-  read -p "Delete ~/.kube ? (y/n) : " response
-  if [[ "$resposne" == "y" ]]; then
+  read -r -p "Delete ~/.kube ? (y/n) : " response
+  if [[ "$response" == "y" ]]; then
    rm -rf "$HOME/.kube" > /dev/null 2>&1
   fi
  fi
@@ -1073,7 +1068,8 @@ function minikube-delete-all {
 
 export -f minikube-delete-all
 
-spliter-combiner() {
+function spliter-combiner {
+
  local OPTIND=1
  local action=""
  local num_parts=""

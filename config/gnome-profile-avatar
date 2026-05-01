@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define the absolute path to the avatar image
-AVATAR_FILE="$HOME/dev.environment/profile/skull-black.png"
+AVATAR_FILE="$HOME/dev.environment/resources/profile/skull-black.png"
 
 echo "Setting profile picture for user: $USER..."
 

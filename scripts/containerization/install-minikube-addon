@@ -1,0 +1,10 @@
+#!/bin/bash
+
+minikube addons enable nvidia-device-plugin
+minikube addons enable metrics-server
+minikube addons enable ingress
+minikube addons enable dashboard
+
+
+echo "Showing other available"
+minikube addons list
