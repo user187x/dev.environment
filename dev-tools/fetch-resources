@@ -3,58 +3,68 @@
 PROJECT_DIR="$PWD/resources"
 
 REPO="resources"
+BRANCH="HEAD"
 USER="user187x"
-URL="https://api.github.com/repos/"
-GIT_URL="https://github.com/$USER/$REPO"
 
-#function list-resources {
+API_URL="https://api.github.com/repos/${USER}/${REPO}/git/trees/${BRANCH}"
+GIT_URL="https://github.com/${USER}/${REPO}"
 
- files=($(curl -s "${URL}${USER}/${REPO}/git/trees/HEAD" | grep '"path"' | awk -F'"' '{print $4}' | sed 's/-parts$//'))
+files=($(curl -s "${API_URL}" | grep '"path"' | awk -F'"' '{print $4}'))
 
 selected=$(printf '%s\n' "${files[@]}" | fzf \
-  --height 40% \
-  --multi \
-  --reverse \
-  --border rounded \
-  --prompt "Select file: " \
-  --pointer "▶" \
-  --marker "✓" \
-  --header "Files in $GIT_URL | ENTER to select | TAB multi-select | ESC to quit" \
-  --header-first \
-  --color "header:italic:yellow,prompt:cyan,pointer:green,marker:green,border:blue" \
-  --preview "echo 'File: {}; Repo: $REPO; User: $USER'" \
-  --preview-window "down:3:wrap" \
-  --bind "ctrl-a:select-all" \
-  --bind "ctrl-d:deselect-all" \
-  --bind "ctrl-/:toggle-preview")
+ --height 40% \
+ --multi \
+ --reverse \
+ --border rounded \
+ --prompt "Select file: " \
+ --pointer "▶" \
+ --marker "✓" \
+ --header "Files in $GIT_URL | [ENTER] to select | [TAB] multi-select | [ESC] to quit" \
+ --header-first \
+ --color "header:italic:yellow,prompt:cyan,pointer:green,marker:green,border:blue" \
+ --preview "echo 'File: {}; Repo: $REPO; User: $USER'" \
+ --preview-window "down:3:wrap" \
+ --bind "ctrl-a:select-all" \
+ --bind "ctrl-d:deselect-all" \
+ --bind "ctrl-/:toggle-preview")
 
-# selected=$(printf '%s\n' "${files[@]}" | fzf  --reverse --border rounded --pointer "▶" --height 40% --prompt "Select file: ")
+GITHUB_URL="https://raw.githubusercontent.com/${USER}/${REPO}/${BRANCH}"
 
+#for file in "${selected[@]}"; do
+# curl -L --create-dirs -o "${file}" "${GITHUB_URL}/${file}"
+#done
 
-# selected=$(printf '%s\n' "${files[@]}" | fzf \
-#  --height 40% \        # popup-style, doesn't take full screen
-#  --reverse \           # list flows top to bottom
-#  --border \            # draws a border around the UI
-#  --prompt "Select file: ")
+download_file() {
+  local file="$1"
+  mkdir -p "$(dirname "$file")"
+  curl -fSL "${GITHUB_URL}/${file}" | pv \
+    --name "$file" \
+    --timer \
+    --rate \
+    --bytes \
+    > "${file}"
+}
 
- #for file in "${files[@]}"; do
- # echo "--> $file"
- #done
+download_path() {
+  local path="$1"
+  local type
 
-# local count=$(ls -1 "$PROJECT_DIR" | wc -l)
-# if (( count == 0 )); then
-#  echo "No resources"
-# else
-#  for resource in "$PROJECT_DIR/"*; do
-#   file_name=$(basename "$resource")
-#   echo "$file_name"
-#  done
-# fi
-#}
+  # Query the GitHub API to check if path is a file or directory
+  type=$(curl -fSL "${API_URL}/${path}" | jq -r 'if type == "array" then "dir" else .type end')
 
-#if [[ -d "$PROJECT_DIR" ]]; then
-# list-resources
-#else
-# git clone git@github.com:user187x/resources.git
-# list-resources
-#fi
+  if [[ "$type" == "dir" ]]; then
+    echo "→ Directory detected: $path, fetching contents..."
+    # Get all file paths within the directory
+    mapfile -t dir_files < <(curl -fSL "${API_URL}/${path}" | jq -r '.[].path')
+    for f in "${dir_files[@]}"; do
+      download_path "$f"  # recurse in case of nested directories
+    done
+  else
+    echo "→ Downloading file: $path"
+    download_file "$path"
+  fi
+}
+
+for selected_path in "${selected[@]}"; do
+  download_path "$selected_path"
+done
