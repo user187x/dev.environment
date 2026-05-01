@@ -1,24 +1,60 @@
 #!/bin/bash
 
-PROJECT="$PWD/resources"
+PROJECT_DIR="$PWD/resources"
 
-function list-resources {
+REPO="resources"
+USER="user187x"
+URL="https://api.github.com/repos/"
+GIT_URL="https://github.com/$USER/$REPO"
 
- count=$(ls -1 "$PROJECT" | wc -l)
+#function list-resources {
 
- if (( count == 0 )); then
-  echo "No resources"
- else
-  for resource in "$PROJECT/"*; do
-   file_name=$(basename "$resource")
-   echo "$file_name"
-  done
- fi
-}
+ files=($(curl -s "${URL}${USER}/${REPO}/git/trees/HEAD" | grep '"path"' | awk -F'"' '{print $4}' | sed 's/-parts$//'))
 
-if [[ -d "$PROJECT" ]]; then
- list-resources
-else
- git clone git@github.com:user187x/resources.git
- list-resources
-fi
+selected=$(printf '%s\n' "${files[@]}" | fzf \
+  --height 40% \
+  --multi \
+  --reverse \
+  --border rounded \
+  --prompt "Select file: " \
+  --pointer "▶" \
+  --marker "✓" \
+  --header "Files in $GIT_URL | ENTER to select | TAB multi-select | ESC to quit" \
+  --header-first \
+  --color "header:italic:yellow,prompt:cyan,pointer:green,marker:green,border:blue" \
+  --preview "echo 'File: {}; Repo: $REPO; User: $USER'" \
+  --preview-window "down:3:wrap" \
+  --bind "ctrl-a:select-all" \
+  --bind "ctrl-d:deselect-all" \
+  --bind "ctrl-/:toggle-preview")
+
+# selected=$(printf '%s\n' "${files[@]}" | fzf  --reverse --border rounded --pointer "▶" --height 40% --prompt "Select file: ")
+
+
+# selected=$(printf '%s\n' "${files[@]}" | fzf \
+#  --height 40% \        # popup-style, doesn't take full screen
+#  --reverse \           # list flows top to bottom
+#  --border \            # draws a border around the UI
+#  --prompt "Select file: ")
+
+ #for file in "${files[@]}"; do
+ # echo "--> $file"
+ #done
+
+# local count=$(ls -1 "$PROJECT_DIR" | wc -l)
+# if (( count == 0 )); then
+#  echo "No resources"
+# else
+#  for resource in "$PROJECT_DIR/"*; do
+#   file_name=$(basename "$resource")
+#   echo "$file_name"
+#  done
+# fi
+#}
+
+#if [[ -d "$PROJECT_DIR" ]]; then
+# list-resources
+#else
+# git clone git@github.com:user187x/resources.git
+# list-resources
+#fi
