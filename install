@@ -1,33 +1,33 @@
 #!/bin/bash
 
-# ==========================================
-# Setup & Configuration
-# ==========================================
-
-# strict mode: exit on error, undefined vars, or pipe failures
+# strict mode exit on error
 set -euo pipefail
 
-# Global Constants
+# global constants
 DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# system resource directories
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.local/cache}"
+CONFIG_HOME="${XDG_CONIG_HOME:-$HOME/.config}"
 
 declare -A RESOURCE_PATH
 
-RESOURCE_PATH["XDG_DATA_HOME"]="$HOME/.local/share"
-RESOURCE_PATH["XDG_CACHE_HOME"]="$HOME/.local/cache"
-RESOURCE_PATH["XDG_CONFIG_HOME"]="$HOME/.config"
-RESOURCE_PATH["DOT_FILES"]="$DEV_HOME/dot-files"
-RESOURCE_PATH["PKG_SCRIPT"]="${RESOURCE_PATH[DOT_FILES]}/packages"
-RESOURCE_PATH["BASHRC_SRC"]="${RESOURCE_PATH[DOT_FILES]}/bashrc"
-RESOURCE_PATH["BASHRC_DST"]="$HOME/.bashrc"
+# resource source definitions
+RESOURCE_PATH["DEV_SOFTWARE"]="$DEV_HOME/resources/software"
 RESOURCE_PATH["FONT_SRC"]="$DEV_HOME/resources/fonts"
-RESOURCE_PATH["FONT_DST"]="${RESOURCE_PATH[XDG_DATA_HOME]}/fonts"
 RESOURCE_PATH["AUDIO_SRC"]="$DEV_HOME/resources/media/audio"
-RESOURCE_PATH["AUDIO_DST"]="${RESOURCE_PATH[XDG_DATA_HOME]}/audio"
-RESOURCE_PATH["TMUX_SRC"]="$DEV_HOME/tmux"
-RESOURCE_PATH["TMUX_DST"]="${RESOURCE_PATH[XDG_CONFIG_HOME]}/tmux"
-RESOURCE_PATH["TPM_SCRIPT"]="${RESOURCE_PATH[TMUX_DST]}/plugins/tpm/bin/install_plugins"
-RESOURCE_PATH["VIM_SRC"]="$DEV_HOME/vim"
+# resource destination definitions
 RESOURCE_PATH["VIM_DST"]="$HOME/.vim"
+RESOURCE_PATH["BASHRC_DST"]="$HOME/.bashrc"
+RESOURCE_PATH["AUDIO_DST"]="${DATA_HOME}/audio"
+RESOURCE_PATH["FONT_DST"]="${DATA_HOME}/fonts"
+RESOURCE_PATH["VIM_SRC"]="${RESOURCE_PATH[DEV_SOFTWARE]}/vim"
+RESOURCE_PATH["BASH_SRC"]="${RESOURCE_PATH[DEV_SOFTWARE]}/bash"
+RESOURCE_PATH["PKG_SCRIPT"]="${RESOURCE_PATH[BASH_SRC]}/packages"
+RESOURCE_PATH["BASHRC_SRC"]="${RESOURCE_PATH[BASH_SRC]}/bashrc"
+RESOURCE_PATH["TMUX_DST"]="${CONFIG_HOME}/tmux"
+RESOURCE_PATH["TPM_SCRIPT"]="${RESOURCE_PATH[TMUX_DST]}/plugins/tpm/bin/install_plugins"
 
 # Colors for logging
 GREEN='\e[92m'
@@ -191,7 +191,7 @@ configure_bash() {
  # Link dot files to user's $HOME directory
  for FILE in "${!MAPPER[@]}"; do
 
-  RESOURCE_SRC="${RESOURCE_PATH[DOT_FILES]}/${FILE}"
+  RESOURCE_SRC="${RESOURCE_PATH[BASH_SRC]}/${FILE}"
   
   if [[ ! -f "${RESOURCE_SRC}" ]]; then
    echo -e "$ERROR Failure referencing source file: ${YELLOW}${RESOURCE_SRC}${END}"
@@ -212,7 +212,7 @@ configure_bash() {
 
  for TARGET in "${TARGETS[@]}"; do
 
-  ENTRY="${RESOURCE_PATH[DOT_FILES]}/$TARGET"
+  ENTRY="${RESOURCE_PATH[BASH_SRC]}/$TARGET"
 
   if ! grep "source $ENTRY" "$HOME/.bashrc" > /dev/null 2>&1; then
    echo -e "$INFO ${GRAY}Adding source entry ${END}${YELLOW}$TARGET${END}${GRAY} to bashrc${END}"
