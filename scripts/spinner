@@ -9,89 +9,89 @@ _SPINNER_PID=""
 # This runs as a background loop. We move the arrays inside to avoid
 # variable scope issues (namerefs lose their reference when forked to the background).
 _spinner_loop() {
-  local style=$1
-  local msg=$2
+ local style=$1
+ local msg=$2
 
-  local delay
-  local -a frames
-  local -a colors
+ local delay
+ local -a frames
+ local -a colors
 
-  # Define styles based on input presets
-  case "$style" in
-    braille)
-      delay=0.08 # [cite: 4]
-      [[ -z "$msg" ]] && msg="Initializing Core..."
-      frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏') # [cite: 3]
-      colors=( "\033[38;5;33m" "\033[38;5;39m" "\033[38;5;45m" "\033[38;5;51m" "\033[38;5;50m" "\033[38;5;49m" "\033[38;5;48m" "\033[38;5;46m" "\033[38;5;48m" "\033[38;5;49m" "\033[38;5;50m" "\033[38;5;51m" "\033[38;5;45m" "\033[38;5;39m" ) # [cite: 3]
-      ;;
-    wave)
-      delay=0.05 # [cite: 4]
-      [[ -z "$msg" ]] && msg="Uploading Data..."
-      frames=(" " "▂" "▃" "▄" "▅" "▆" "▇" "█" "▇" "▆" "▅" "▄" "▃" " ") # [cite: 4]
-      colors=( "\033[38;5;33m" "\033[38;5;39m" "\033[38;5;45m" "\033[38;5;51m" "\033[38;5;50m" "\033[38;5;49m" "\033[38;5;48m" "\033[38;5;46m" "\033[38;5;48m" "\033[38;5;49m" "\033[38;5;50m" "\033[38;5;51m" "\033[38;5;45m" "\033[38;5;39m" ) # [cite: 3]
-      ;;
-    pulse)
-      delay=0.2 # [cite: 5]
-      [[ -z "$msg" ]] && msg=""
-      frames=("Loading   " "Loading.  " "Loading.. " "Loading...") # [cite: 4, 5]
-      colors=("\033[1;37m") # [cite: 4]
-      ;;
-  esac
+ # Define styles based on input presets
+ case "$style" in
+ braille)
+  delay=0.08 # [cite: 4]
+  [[ -z "$msg" ]] && msg="Initializing Core..."
+  frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')                                                                                                                                                                                         # [cite: 3]
+  colors=("\033[38;5;33m" "\033[38;5;39m" "\033[38;5;45m" "\033[38;5;51m" "\033[38;5;50m" "\033[38;5;49m" "\033[38;5;48m" "\033[38;5;46m" "\033[38;5;48m" "\033[38;5;49m" "\033[38;5;50m" "\033[38;5;51m" "\033[38;5;45m" "\033[38;5;39m") # [cite: 3]
+  ;;
+ wave)
+  delay=0.05 # [cite: 4]
+  [[ -z "$msg" ]] && msg="Uploading Data..."
+  frames=(" " "▂" "▃" "▄" "▅" "▆" "▇" "█" "▇" "▆" "▅" "▄" "▃" " ")                                                                                                                                                                         # [cite: 4]
+  colors=("\033[38;5;33m" "\033[38;5;39m" "\033[38;5;45m" "\033[38;5;51m" "\033[38;5;50m" "\033[38;5;49m" "\033[38;5;48m" "\033[38;5;46m" "\033[38;5;48m" "\033[38;5;49m" "\033[38;5;50m" "\033[38;5;51m" "\033[38;5;45m" "\033[38;5;39m") # [cite: 3]
+  ;;
+ pulse)
+  delay=0.2 # [cite: 5]
+  [[ -z "$msg" ]] && msg=""
+  frames=("Loading   " "Loading.  " "Loading.. " "Loading...") # [cite: 4, 5]
+  colors=("\033[1;37m")                                        # [cite: 4]
+  ;;
+ esac
 
-  tput civis # Hide cursor
+ tput civis # Hide cursor
 
-  # Clean up gracefully if the background process is killed
-  trap 'tput cnorm; printf "\r\033[K"; exit 0' TERM INT
+ # Clean up gracefully if the background process is killed
+ trap 'tput cnorm; printf "\r\033[K"; exit 0' TERM INT
 
-  local i=0
-  while true; do
-    # Calculate indexes using modulo math [cite: 2]
-    local frame_idx=$((i % ${#frames[@]})) # [cite: 2]
-    local color_idx=$((i % ${#colors[@]})) # [cite: 2]
+ local i=0
+ while true; do
+  # Calculate indexes using modulo math [cite: 2]
+  local frame_idx=$((i % ${#frames[@]})) # [cite: 2]
+  local color_idx=$((i % ${#colors[@]})) # [cite: 2]
 
-    local frame="${frames[$frame_idx]}"
-    local current_color="${colors[$color_idx]}"
+  local frame="${frames[$frame_idx]}"
+  local current_color="${colors[$color_idx]}"
 
-    # Print the spinner
-    printf "\r${current_color}%s\033[0m %s" "$frame" "$msg" # [cite: 2]
+  # Print the spinner
+  printf "\r${current_color}%s\033[0m %s" "$frame" "$msg" # [cite: 2]
 
-    sleep "$delay" # [cite: 2]
-    ((i++))
-  done
+  sleep "$delay" # [cite: 2]
+  ((i++))
+ done
 }
 
 # --- MAIN EXPORTED FUNCTION ---
 # Usage: spinner [style|stop] [custom message]
 spinner() {
-  local action=$1
-  local msg=$2
+ local action=$1
+ local msg=$2
 
-  # 1. Handle stopping the spinner
-  if [[ "$action" == "stop" ]]; then
-    if [[ -n "$_SPINNER_PID" ]]; then
-      kill "$_SPINNER_PID" 2>/dev/null
-      wait "$_SPINNER_PID" 2>/dev/null
-      _SPINNER_PID=""
-
-      # Clear the line and restore cursor [cite: 1, 2]
-      printf "\r\033[K" #
-      tput cnorm #
-    fi
-    return 0
-  fi
-
-  # 2. If a spinner is already running, stop it before starting a new one
+ # 1. Handle stopping the spinner
+ if [[ "$action" == "stop" ]]; then
   if [[ -n "$_SPINNER_PID" ]]; then
-    spinner stop
-  fi
+   kill "$_SPINNER_PID" 2>/dev/null
+   wait "$_SPINNER_PID" 2>/dev/null
+   _SPINNER_PID=""
 
-  # 3. Start the requested spinner
-  if [[ "$action" =~ ^(braille|wave|pulse)$ ]]; then # [cite: 6]
-    # Send to background and capture PID
-    _spinner_loop "$action" "$msg" &
-    _SPINNER_PID=$!
-  else
-    echo "Invalid option. Choose: braille, wave, pulse, or stop" >&2 # [cite: 5, 6]
-    return 1
+   # Clear the line and restore cursor [cite: 1, 2]
+   printf "\r\033[K" #
+   tput cnorm        #
   fi
+  return 0
+ fi
+
+ # 2. If a spinner is already running, stop it before starting a new one
+ if [[ -n "$_SPINNER_PID" ]]; then
+  spinner stop
+ fi
+
+ # 3. Start the requested spinner
+ if [[ "$action" =~ ^(braille|wave|pulse)$ ]]; then # [cite: 6]
+  # Send to background and capture PID
+  _spinner_loop "$action" "$msg" &
+  _SPINNER_PID=$!
+ else
+  echo "Invalid option. Choose: braille, wave, pulse, or stop" >&2 # [cite: 5, 6]
+  return 1
+ fi
 }
