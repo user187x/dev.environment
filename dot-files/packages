@@ -2,116 +2,16 @@
 
 SCRIPT_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Configuration
-PKG_BACKUP_DIR="$SCRIPT_HOME/package-backup"
-mkdir -p "$PKG_BACKUP_DIR"
+failed=()
+installed=()
 
-# Update repositories (Non-blocking)
+# Update repositories
 echo "--- 🔄 Updating Package Lists ---"
-if sudo apt update -y; then
+if sudo apt update -y && sudo apt upgrade -y; then
  echo "Update successful."
- ONLINE=true
 else
- echo -e "\e[1;91mUpdate failed. Proceeding in OFFLINE mode (using cache where possible).\e[0m"
- ONLINE=false
+ echo -e "\e[1;91mUpdate failed.\e[0m"
 fi
-
-# Upgrade the packages
-echo "Upgrading packages"
-sudo apt update -y && sudo apt upgrade -y
-
-TRACKER_FILE="$HOME/.init-pkgs"
-
-function check-pkg-init() {
-
- local current_time=$(date +%s)
- local threshold_seconds=86400
-
- if [[ ! -f "$TRACKER_FILE" ]]; then
-  touch "$TRACKER_FILE"
-  return 1
- fi
-
- local file_mod_time=$(date -r "$TRACKER_FILE" +%s)
- local age=$((current_time - file_mod_time))
-
- if [[ "$age" -ge "$threshold_seconds" ]]; then
-  rm -rf "$TRACKER_FILE" >/dev/null 2>&1
-  return 1
- else
-  echo "Initialization (Last run $((age / 3600)) hours ago). Skipping"
-  return 0
- fi
-}
-
-# Backup packages
-backup_pkg() {
-
- local pkg="$1"
-
- # Validation
- if [[ -z "$pkg" ]]; then return 1; fi
-
- # Check what version we just installed
- local installed_ver
- installed_ver=$(dpkg-query -W -f='${Version}' "$pkg" 2>/dev/null)
-
- if [[ -z "$installed_ver" ]]; then
-  echo "Error: '$pkg' was supposed to be installed but wasn't found."
-  return 1
- fi
-
- # Check if we already have this specific version cached
- # We look for the package name followed by the version string to avoid downloading duplicates
- if ls "$PKG_BACKUP_DIR/${pkg}_${installed_ver}"*.deb 1>/dev/null 2>&1; then
-  echo "[$pkg] Backup already exists for version $installed_ver."
-  return 0
- fi
-
- echo "[$pkg] Backing up version $installed_ver..."
-
- # Clean old versions of this specific package to save space
- rm -f "$PKG_BACKUP_DIR/${pkg}_"*.deb
-
- # Download in a subshell to keep current directory clean
- (
-  cd "$PKG_BACKUP_DIR" || return
-  # specific download command requires apt-get, not apt
-  if apt-get download "$pkg" >/dev/null 2>&1; then
-   echo "[$pkg] Cached to $PKG_BACKUP_DIR"
-  else
-   echo "[$pkg] Failed to download backup."
-  fi
- )
-}
-
-# Function: Install from local cache (Runs if online install FAILS)
-install_pkg_from_cache() {
- local pkg="$1"
-
- echo "[$pkg] Attempting offline install from cache..."
-
- local deb_file
- deb_file=$(find "$PKG_BACKUP_DIR" -maxdepth 1 -name "${pkg}_*.deb" -print | head -n 1)
-
- if [[ -z "$deb_file" ]]; then
-  echo -e "[$pkg] \e[1;91mNo cached backup found.\e[0m"
-  return 1
- fi
-
- echo "[$pkg] Found cached file: $(basename "$deb_file")"
-
- # Try installing via dpkg (apt install ./file works too but requires path)
- if sudo apt install "$deb_file" -y; then
-  echo -e "[$pkg] \e[1;92mSuccessfully installed from cache.\e[0m"
-  return 0
- else
-  echo -e "[$pkg] \e[1;91mFailed to install from cache (missing dependencies?).\e[0m"
-  return 1
- fi
-}
-
-#sudo DEBIAN_FRONTEND=noninteractive apt install -y cmatrix
 
 # List of tools (Binary:Package or just Package)
 packages=(
@@ -135,7 +35,6 @@ packages=(
  "notify-send:libnotify-bin"
  "yq"
  "figlet"
- "vim-gtk"
  "toilet"
  "qrencode"
  "python3-segno"
@@ -189,84 +88,67 @@ packages=(
  "synaptic"
 )
 
-failed=()
-installed=()
-
-echo ""
+echo
 echo "--- 📦 Starting APT Package Installation ---"
 
-for item in "${packages[@]}"; do
- # Split the string by colon to get binary and package
- if [[ "$item" == *":"* ]]; then
-  binary="${item%%:*}"
-  package="${item##*:}"
- else
-  binary="$item"
-  package="$item"
- fi
+function install-packages {
 
- # 1. Check if binary exists
- if ! command -v "$binary" >/dev/null 2>&1; then
-  echo "Installing $package..."
+ echo ""
+ echo "--- 📦 Starting APT Package Installation ---"
 
-  # 2. Try Online Install
-  if sudo apt install "$package" -y; then
-   echo -e "Tool [\e[1;92m$package\e[0m] Installed (Online)"
-   installed+=("$package")
+ for item in "${packages[@]}"; do
+  # Split the string by colon into an array called 'parts'
+  IFS=':' read -r -a parts <<<"$item"
 
-   # 3. If Online Success -> Backup for next time
-   #backup_pkg "$package"
+  # The first element is always the command/binary to check
+  binary="${parts[0]}"
+
+  # The remaining elements are the package names to try
+  if [[ ${#parts[@]} -eq 1 ]]; then
+   # If there are no colons, the binary name is also the package name
+   pkg_variations=("$binary")
   else
-   echo -e "Online install failed for [\e[1;91m$package\e[0m]. Trying Cache..."
-
-   # 4. Try Offline Install
-   if install_pkg_from_cache "$package"; then
-    installed+=("$package")
-   else
-    echo -e "Tool [\e[1;91m$package\e[0m] failed completely."
-    failed+=("$package")
-   fi
+   # Slice the array to get everything after the first element
+   pkg_variations=("${parts[@]:1}")
   fi
- else
-  echo -e "Tool [\e[1;92m$package\e[0m] already installed"
-  installed+=("$package")
 
-  # Optional: Even if installed, ensure we have a backup if we are online
-  #if [ "$ONLINE" = true ]; then
-  # backup_pkg "$package"
-  #fi
- fi
-done
+  # 1. Check if binary already exists
+  if ! command -v "$binary" >/dev/null 2>&1; then
+   echo "Installing $binary..."
+   success=false
 
-echo ""
-echo -e "(i) Total Tools     : \e[1;94m${#packages[@]}\e[0m"
-echo -e "(i) Total Installed : \e[1;92m${#installed[@]}\e[0m"
+   # 2. Loop through each package variation and try to install it
+   for pkg in "${pkg_variations[@]}"; do
+    if sudo apt install "$pkg" -y; then
+     echo -e "Tool [\e[1;92m$binary\e[0m] Installed (via '$pkg')"
+     installed+=("$binary")
+     success=true
+     break # Exit the inner loop on success
+    else
+     echo -e "⚠️ Attempt to install via [\e[1;93m$pkg\e[0m] failed. Trying next..."
+    fi
+   done
 
-count="${#failed[@]}"
-if [[ "$count" -eq 0 ]]; then
- msg="\e[1;92m$count\e[0m"
-else
- msg="\e[1;91m$count\e[0m"
-fi
-echo -e "(i) Total Failed    : $msg"
-
-if [[ "${#packages[@]}" -ne "${#installed[@]}" ]]; then
- echo "Tools Missing/Failed:"
- for tool in "${failed[@]}"; do
-  echo -e " [\e[1;91m$tool\e[0m]"
+   # 3. If the loop finished and success is still false, it failed completely
+   if [ "$success" = false ]; then
+    echo -e "Tool [\e[1;91m$binary\e[0m] failed to install completely."
+    failed+=("$binary")
+   fi
+  else
+   echo -e "Tool [\e[1;92m$binary\e[0m] already installed"
+   installed+=("$binary")
+  fi
  done
-else
- echo -e "(i) \e[1;92mAll apt packages processed successfully!\e[0m"
- export __PACKAGES_INIT__=1
-fi
+}
 
-echo "Updating package manager"
-sudo apt update -y && sudo apt upgrade -y
+# Install packages begins here
+install-packages
 
-echo ""
+echo
 echo "--- 🚀 Starting Custom Installations ---"
 
 # Add flatpak repo
+echo "Adding any necessary flatpak repositories"
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
 function install-helm {
@@ -358,7 +240,7 @@ if ! command -v terraform >/dev/null 2>&1; then
  sudo apt update && sudo apt install terraform packer
 fi
 
-# Install Helm
+# Install Helm (Script fallback)
 if ! command -v helm >/dev/null 2>&1; then
  echo "Installing helm..."
  curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
