@@ -42,6 +42,21 @@ function clock {
 }
 export -f clock
 
+function clipboard-to-file {
+
+ read -e -r -p "Enter file to paste clipboard contents to: " file
+
+ if [[ ! -f "$file" ]]; then
+  echo "File not found. Terminating"
+ else
+  if xclip -select clipboard -o "$file"; then
+   echo "Contents pasted into file $file successfully"
+  else
+   echo "System clipboard Paste failed"
+  fi
+ fi
+}
+
 function clipboard {
 
  local G='\033[0;92m'
