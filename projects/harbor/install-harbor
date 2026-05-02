@@ -1,0 +1,113 @@
+#!/bin/bash
+
+set -e
+
+# Configuration
+CHART_VERSION="1.14.0" # Harbor Helm Chart version
+BUNDLE_DIR="./harbor-offline-bundle"
+IMAGE_TAR="harbor-images.tar"
+CHART_DIR="harbor"
+REPO_NAME="harbor"
+REPO_URL="https://helm.goharbor.io"
+
+download_phase() {
+  echo "🚀 Starting Phase 1: Downloading assets on internet-connected machine..."
+  
+  mkdir -p "$BUNDLE_DIR"
+  cd "$BUNDLE_DIR"
+
+  echo "📦 1. Downloading Harbor Helm Chart v${CHART_VERSION}..."
+
+  if helm repo list | grep -q "${REPO_NAME}"; then
+    echo "Helm repo ${REPO_NAME} already installed ✅"
+    return 0
+  fi
+
+  helm repo add harbor "${REPO_URL}" > /dev/null 2>&1 || true
+  helm repo update > /dev/null 2>&1
+
+  helm pull harbor/harbor --version "${CHART_VERSION}" --untar
+
+  echo "🔍 2. Dynamically extracting required image tags from the chart..."
+  # Templates the chart and automatically extracts every required image
+  IMAGES=($(helm template harbor ./${CHART_DIR} | grep -w "image:" | awk '{print $2}' | tr -d '"' | sort | uniq))
+
+  if [ ${#IMAGES[@]} -eq 0 ]; then
+      echo "❌ Failed to parse images from the Helm chart. Please check your helm installation."
+      exit 1
+  fi
+
+  echo "🐳 3. Pulling ${#IMAGES[@]} Docker images..."
+  for img in "${IMAGES[@]}"; do
+    echo "  -> Pulling $img"
+    docker pull "$img"
+  done
+
+  echo "💾 4. Saving images to a single tarball (this may take a few minutes)..."
+  # shellcheck disable=SC2046
+  docker save -o "$IMAGE_TAR" "${IMAGES[@]}"
+
+  echo "✅ Download complete! Move the '${BUNDLE_DIR}' folder to your air-gapped environment."
+}
+
+install_phase() {
+  echo "🚀 Starting Phase 2: Installing on air-gapped Kubernetes cluster..."
+  
+  if [ ! -d "$BUNDLE_DIR" ]; then
+    echo "❌ Error: Cannot find ${BUNDLE_DIR}. Did you run --download and move the folder here?"
+    exit 1
+  fi
+  
+  cd "$BUNDLE_DIR"
+
+  echo "⚙️ 1. Loading images into Kubernetes nodes..."
+  # Standard containerd import (requires root/sudo usually)
+  sudo ctr -n k8s.io images import "$IMAGE_TAR" || echo "⚠️ Warning: Auto-import failed. Please manually load $IMAGE_TAR into your K8s node container runtime."
+
+  echo "📝 2. Generating custom air-gapped values.yaml..."
+  cat <<EOF > values-airgap.yaml
+expose:
+  type: nodePort
+  tls:
+    enabled: false
+externalURL: http://YOUR_NODE_IP:30002
+
+notary:
+  enabled: false
+trivy:
+  enabled: true
+  skipUpdate: true # Prevents crash-loops trying to reach GitHub offline
+
+database:
+  type: internal
+redis:
+  type: internal
+
+nginx:
+  nodePort:
+    ports:
+      http:
+        port: 30002
+EOF
+
+  echo "You must replace 'YOUR_NODE_IP' in values-airgap.yaml with the IP address of one of your K8s worker nodes."
+  read -p "Press [Enter] when you have updated values-airgap.yaml or press [Enter] to continue with localhost..."
+
+  echo "⚓ 3. Deploying Harbor via Helm..."
+  helm upgrade --install harbor ./${CHART_DIR} \
+    --namespace harbor-system \
+    --create-namespace \
+    -f values-airgap.yaml
+
+  echo "✅ Harbor deployment initiated!"
+  echo "Check status with: kubectl get pods -n harbor-system"
+  echo "Default credentials -> admin : Harbor12345"
+}
+
+if [ "$1" == "--download" ]; then
+  download_phase
+elif [ "$1" == "--install" ]; then
+  install_phase
+else
+  echo "Usage: $0 [--download | --install]"
+fi
