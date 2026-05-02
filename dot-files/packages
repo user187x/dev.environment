@@ -269,9 +269,73 @@ echo "--- 🚀 Starting Custom Installations ---"
 # Add flatpak repo
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
+function install-helm {
+ # 1. Detect OS and Architecture
+ local OS
+ OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+ local ARCH
+ ARCH=$(uname -m)
+
+ # Map architecture to Helm's naming convention
+ if [ "$ARCH" = "x86_64" ]; then
+  ARCH="amd64"
+ elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+  ARCH="arm64"
+ else
+  echo "Error: Unsupported architecture ($ARCH)"
+  return 1
+ fi
+
+ # 2. Fetch the latest version tag from GitHub API
+ echo "Fetching the latest Helm version..."
+ local VERSION
+ VERSION=$(curl -s https://api.github.com/repos/helm/helm/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+
+ if [ -z "$VERSION" ]; then
+  echo "Error: Failed to fetch the latest version."
+  return 1
+ fi
+
+ echo "Latest version identified as ${VERSION}."
+
+ # 3. Construct download URL
+ local TARBALL="helm-${VERSION}-${OS}-${ARCH}.tar.gz"
+ local DOWNLOAD_URL="https://get.helm.sh/${TARBALL}"
+
+ # 4. Create a temporary directory for safe extraction
+ local TMP_DIR
+ TMP_DIR=$(mktemp -d)
+
+ echo "Downloading ${TARBALL}..."
+ if ! curl -fsSL -o "${TMP_DIR}/${TARBALL}" "$DOWNLOAD_URL"; then
+  echo "Error: Download failed."
+  rm -rf "$TMP_DIR"
+  return 1
+ fi
+
+ echo "Extracting archive..."
+ tar -zxvf "${TMP_DIR}/${TARBALL}" -C "$TMP_DIR" >/dev/null
+
+ # 5. Move the binary to a directory in your PATH (requires sudo)
+ echo "Installing Helm to /usr/local/bin/ (you may be prompted for your password)..."
+ if sudo mv "${TMP_DIR}/${OS}-${ARCH}/helm" /usr/local/bin/helm; then
+  sudo chmod +x /usr/local/bin/helm
+  echo "✅ Helm ${VERSION} successfully installed!"
+ else
+  echo "Error: Failed to move the binary. Check your permissions."
+ fi
+
+ # 6. Cleanup
+ rm -rf "$TMP_DIR"
+
+ # Verify installation
+ helm version --short
+}
+
 echo "Installing helm..."
 if ! command -v helm >/dev/null 2>&1; then
- curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+ install-helm
  helm repo add gitlab https://charts.gitlab.io/
  helm repo update
 fi
