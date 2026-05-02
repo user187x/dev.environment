@@ -158,4 +158,71 @@ function splitter-combiner {
  fi
 }
 
+function fetch {
+
+ local REPO="resources"
+ local BRANCH="HEAD"
+ local USER="user187x"
+ local API_URL="https://api.github.com/repos/${USER}/${REPO}/git/trees/${BRANCH}"
+ local GIT_URL="https://github.com/${USER}/${REPO}"
+ local PROJECT_DIR="$PWD/resources"
+ local GITHUB_URL="https://raw.githubusercontent.com/${USER}/${REPO}/${BRANCH}"
+
+ download() {
+
+  local file="$1"
+  mkdir -p "$(dirname "$file")"
+  curl -fSL "${GITHUB_URL}/${file}" | pv \
+   --name "$file" \
+   --timer \
+   --rate \
+   --bytes \
+   >"${file}"
+ }
+
+ get-path() {
+
+  local path="$1"
+  local type
+
+  # Query the GitHub API to check if path is a file or directory
+  type=$(curl -fSL "${API_URL}/${path}" | jq -r 'if type == "array" then "dir" else .type end')
+
+  if [[ "$type" == "dir" ]]; then
+   echo "→ Directory detected: $path, fetching contents..."
+   # Get all file paths within the directory
+   mapfile -t dir_files < <(curl -fSL "${API_URL}/${path}" | jq -r '.[].path')
+   for f in "${dir_files[@]}"; do
+    get-path "$f" # recurse in case of nested directories
+   done
+  else
+   echo "→ Downloading file: $path"
+   download "$path"
+  fi
+ }
+
+ FILES=($(curl -s "${API_URL}" | grep '"path"' | awk -F'"' '{print $4}'))
+
+ OPTIONS=$(printf '%s\n' "${FILES[@]}" | fzf \
+  --height 40% \
+  --multi \
+  --reverse \
+  --border rounded \
+  --prompt "Select file: " \
+  --pointer "▶" \
+  --marker "✓" \
+  --header "Files in $GIT_URL | [ENTER] to select | [TAB] multi-select | [ESC] to quit" \
+  --header-first \
+  --color "header:italic:yellow,prompt:cyan,pointer:green,marker:green,border:blue" \
+  --preview "echo 'File: {}; Repo: $REPO; User: $USER'" \
+  --preview-window "down:3:wrap" \
+  --bind "ctrl-a:select-all" \
+  --bind "ctrl-d:deselect-all" \
+  --bind "ctrl-/:toggle-preview")
+
+ for file in "${OPTIONS[@]}"; do
+  get-path "$file"
+ done
+}
+
 splitter-combiner "$@"
