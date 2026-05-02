@@ -47,39 +47,33 @@ if [ -x /usr/bin/lesspipe ]; then
 fi
 
 ############################################
-#           Bash Resource Files            #
-############################################
-
-
-############################################
 #           TERMINAL FUNCTIONS             #
 ############################################
 
-RED="\[\e[38;5;196m\]"
-GREEN="\[\e[38;5;84m\]"
-BRIGHT_GREEN="\[\e[38;5;216m\]"
-YELLOW="\[\e[0;33m\]"
-BLUE="\[\e[0;34m\]"
-MAGENTA="\[\e[0;35m\]"
-CYAN="\[\e[0;36m\]"
-END="\[\e[0m\]"
+RED="\e[38;5;196m"
+GREEN="\e[38;5;84m"
+BRIGHT_GREEN="\e[38;5;216m"
+YELLOW="\e[0;33m"
+BLUE="\e[0;34m"
+MAGENTA="\e[0;35m"
+CYAN="\e[0;36m"
+END="\e[0m"
 
-update_prompt_string() {
-
+function update-ps1-text {
  local EXIT_CODE=$?
-
  if [[ "$EXIT_CODE" -eq 0 ]]; then
-  PS1="${GREEN} ➤  ${END}"
+  # 2. Hardcode the \[ and \] directly into the PS1 string
+  PS1="\[${GREEN}\] ➤  \[${END}\]"
  else
-  PS1="${RED} ➤💥  ${END}"
+  PS1="\[${RED}\] ➤💥  \[${END}\]"
  fi
 }
 
 # Bash terminal prompt session
-export PS1='${BRIGHT_GREEN} ➤  ${END}'
+export PS1='\[${BRIGHT_GREEN}\] ➤  \[${END}\]'
 
 # Execute the dynamic prompt update (Function defined in bashrc_functions)
-export PROMPT_COMMAND=update_prompt_string
+export PROMPT_COMMAND=update-ps1-text
 
 ################################################
 # BASH AUTO UPDATE                             #
