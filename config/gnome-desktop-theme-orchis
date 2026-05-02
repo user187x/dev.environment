@@ -1,0 +1,14 @@
+#!/bin/bash
+
+ORCHIS_THEME_INSTALLER="../themes/desktop/orchis/install.sh"
+
+if [[ ! -f "$ORCHIS_THEME_INSTALLER" ]];then
+ echo "Orchis Gnome desktop theme installation script not found..."
+ return 1
+else
+ if "$ORCHIS_THEME_INSTALLER" -t grey -c dark -s compact --round 15px --libadwaita; then
+  echo -e "(\e[90mi\e[0m) Orchis Gnome desktop theme installed..."
+ else
+  echo -e "(\e[91m!\e[0m) Failure installing Orchis Gnome desktop theme"
+ fi
+fi
