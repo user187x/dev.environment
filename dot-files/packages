@@ -175,7 +175,8 @@ packages=(
  "cmatrix"
  "sysvbanner"
  "xclip"
- "7ozip"
+ "7zip"
+ "unrar"
  "util-linux-extra"
  "gnome-terminal"
  "p7zip-full"
@@ -267,6 +268,13 @@ echo "--- 🚀 Starting Custom Installations ---"
 
 # Add flatpak repo
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
+echo "Installing helm..."
+if ! command -v helm >/dev/null 2>&1; then
+ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+ helm repo add gitlab https://charts.gitlab.io/
+ helm repo update
+fi
 
 if ! command -v terraform >/dev/null 2>&1; then
 

@@ -1,17 +1,49 @@
 #!/bin/bash
 
-PROJECT_DIR="$PWD/resources"
-
 REPO="resources"
 BRANCH="HEAD"
 USER="user187x"
-
 API_URL="https://api.github.com/repos/${USER}/${REPO}/git/trees/${BRANCH}"
 GIT_URL="https://github.com/${USER}/${REPO}"
+PROJECT_DIR="$PWD/resources"
+GITHUB_URL="https://raw.githubusercontent.com/${USER}/${REPO}/${BRANCH}"
 
-files=($(curl -s "${API_URL}" | grep '"path"' | awk -F'"' '{print $4}'))
+function download {
 
-selected=$(printf '%s\n' "${files[@]}" | fzf \
+  local file="$1"
+  mkdir -p "$(dirname "$file")"
+  curl -fSL "${GITHUB_URL}/${file}" | pv \
+    --name "$file" \
+    --timer \
+    --rate \
+    --bytes \
+    > "${file}"
+}
+
+function get-path {
+
+  local path="$1"
+  local type
+
+  # Query the GitHub API to check if path is a file or directory
+  type=$(curl -fSL "${API_URL}/${path}" | jq -r 'if type == "array" then "dir" else .type end')
+
+  if [[ "$type" == "dir" ]]; then
+    echo "→ Directory detected: $path, fetching contents..."
+    # Get all file paths within the directory
+    mapfile -t dir_files < <(curl -fSL "${API_URL}/${path}" | jq -r '.[].path')
+    for f in "${dir_files[@]}"; do
+      get-path "$f"  # recurse in case of nested directories
+    done
+  else
+    echo "→ Downloading file: $path"
+    download "$path"
+  fi
+}
+
+FILES=($(curl -s "${API_URL}" | grep '"path"' | awk -F'"' '{print $4}'))
+
+OPTIONS=$(printf '%s\n' "${FILES[@]}" | fzf \
  --height 40% \
  --multi \
  --reverse \
@@ -28,43 +60,6 @@ selected=$(printf '%s\n' "${files[@]}" | fzf \
  --bind "ctrl-d:deselect-all" \
  --bind "ctrl-/:toggle-preview")
 
-GITHUB_URL="https://raw.githubusercontent.com/${USER}/${REPO}/${BRANCH}"
-
-#for file in "${selected[@]}"; do
-# curl -L --create-dirs -o "${file}" "${GITHUB_URL}/${file}"
-#done
-
-download_file() {
-  local file="$1"
-  mkdir -p "$(dirname "$file")"
-  curl -fSL "${GITHUB_URL}/${file}" | pv \
-    --name "$file" \
-    --timer \
-    --rate \
-    --bytes \
-    > "${file}"
-}
-
-download_path() {
-  local path="$1"
-  local type
-
-  # Query the GitHub API to check if path is a file or directory
-  type=$(curl -fSL "${API_URL}/${path}" | jq -r 'if type == "array" then "dir" else .type end')
-
-  if [[ "$type" == "dir" ]]; then
-    echo "→ Directory detected: $path, fetching contents..."
-    # Get all file paths within the directory
-    mapfile -t dir_files < <(curl -fSL "${API_URL}/${path}" | jq -r '.[].path')
-    for f in "${dir_files[@]}"; do
-      download_path "$f"  # recurse in case of nested directories
-    done
-  else
-    echo "→ Downloading file: $path"
-    download_file "$path"
-  fi
-}
-
-for selected_path in "${selected[@]}"; do
-  download_path "$selected_path"
+for file in "${OPTIONS[@]}"; do
+  get-path "$file"
 done
