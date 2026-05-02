@@ -35,12 +35,62 @@ APP_NAMESPACE="${APP_NAMESPACE:-guestbook}"
 GITLAB_USER="${GITLAB_USER:-root}"
 WORK_DIR="${WORK_DIR:-/tmp/argocd-gitlab-setup}"
 
+install_argocd_cli() {
+  local endpoint="$1"
+ 
+  local os arch binary
+  os=$(uname -s | tr '[:upper:]' '[:lower:]')
+  arch=$(uname -m)
+  [[ "${arch}" == "x86_64" ]]              && arch="amd64"
+  [[ "${arch}" =~ ^(aarch64|arm64)$ ]]     && arch="arm64"
+  binary="argocd-${os}-${arch}"
+ 
+  # ArgoCD's UI server exposes CLI downloads at /download/<binary>.
+  # --insecure because the in-cluster server uses a self-signed certificate.
+  local url="https://${endpoint}/download/${binary}"
+  log "Downloading argocd CLI from in-cluster server: ${url}"
+  curl -sSLk -o /tmp/argocd-download "${url}" \
+    || error "curl failed fetching argocd CLI from ${url}"
+ 
+  # Guard against downloading an HTML error page instead of a binary
+  local dl_type
+  dl_type=$(file /tmp/argocd-download)
+  echo "${dl_type}" | grep -qiE 'ELF|Mach-O|executable' \
+    || error "ArgoCD server did not return a binary (got: ${dl_type}).\nIs argocd-server healthy? Check: kubectl get pods -n ${ARGOCD_NAMESPACE}"
+ 
+  chmod +x /tmp/argocd-download
+ 
+  # Overwrite any existing binary in-place to avoid PATH ordering issues.
+  # If nothing exists yet, pick the first writable standard location.
+  local existing install_target
+  existing=$(command -v argocd 2>/dev/null || true)
+  if [[ -n "${existing}" ]]; then
+    install_target="${existing}"
+  elif [[ -w /usr/local/bin ]]; then
+    install_target="/usr/local/bin/argocd"
+  else
+    mkdir -p "${HOME}/bin"
+    install_target="${HOME}/bin/argocd"
+    export PATH="${HOME}/bin:${PATH}"
+  fi
+
+  cp /tmp/argocd-download "${install_target}" \
+    || error "Cannot write to '${install_target}'. Try: sudo cp /tmp/argocd-download ${install_target}"
+  rm -f /tmp/argocd-download
+  success "argocd CLI installed to ${install_target}"
+ 
+  # Final smoke-test — must produce version output without errors
+  argocd version --client --short &>/dev/null \
+    || error "argocd still not executable after install. Check: file ${install_target}"
+  success "argocd CLI smoke-test passed ($(argocd version --client --short 2>/dev/null | head -1))."
+}
+
 # =============================================================================
 #  STEP 0 — Preflight checks
 # =============================================================================
 banner "Step 0 · Preflight checks"
 
-for bin in kubectl minikube curl jq git argocd; do
+for bin in kubectl minikube curl jq git; do
  command -v "$bin" &>/dev/null ||
   error "'$bin' not found in PATH. Please install it first."
  success "$bin found."
@@ -60,6 +110,7 @@ log "Verifying GitLab pods are running..."
 kubectl get deployment gitlab-webservice-default -n "${GITLAB_NAMESPACE}" &>/dev/null ||
  error "GitLab not found in namespace '${GITLAB_NAMESPACE}'. Run the GitLab install script first."
 success "GitLab is present."
+
 
 # =============================================================================
 #  STEP 1 — Gather dynamic cluster values
@@ -87,6 +138,37 @@ ARGOCD_PASS=$(kubectl get secret argocd-initial-admin-secret \
 success "Minikube IP       : ${MINIKUBE_IP}"
 success "GitLab URL        : ${GITLAB_URL}"
 success "ArgoCD endpoint   : https://${ARGOCD_ENDPOINT}"
+
+# =============================================================================
+#  STEP 1b — Install / repair argocd CLI from the in-cluster ArgoCD server
+# =============================================================================
+
+banner "Step 1b · Install argocd CLI (from in-cluster server)"
+ 
+# Check whether the existing binary (if any) is actually executable.
+# A corrupted download passes `command -v` but fails on execution.
+ARGOCD_BIN=$(command -v argocd 2>/dev/null || true)
+NEEDS_INSTALL=true
+ 
+if [[ -n "${ARGOCD_BIN}" ]]; then
+  ARGOCD_FILE_TYPE=$(file "${ARGOCD_BIN}" 2>/dev/null || true)
+  if echo "${ARGOCD_FILE_TYPE}" | grep -qiE 'ELF|Mach-O|executable'; then
+    if argocd version --client --short &>/dev/null; then
+      success "argocd CLI already valid at ${ARGOCD_BIN} — skipping install."
+      NEEDS_INSTALL=false
+    else
+      warn "argocd binary exists but failed smoke-test — reinstalling."
+    fi
+  else
+    warn "argocd at '${ARGOCD_BIN}' is not a real binary (type: ${ARGOCD_FILE_TYPE})."
+    warn "Will overwrite it with a fresh copy from the ArgoCD server."
+  fi
+fi
+ 
+if [[ "${NEEDS_INSTALL}" == "true" ]]; then
+  install_argocd_cli "${ARGOCD_ENDPOINT}"
+fi
+
 
 # =============================================================================
 #  STEP 2 — Test GitLab reachability from the host

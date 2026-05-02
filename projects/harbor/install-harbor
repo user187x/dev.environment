@@ -11,6 +11,7 @@ REPO_NAME="harbor"
 REPO_URL="https://helm.goharbor.io"
 
 download_phase() {
+
   echo "🚀 Starting Phase 1: Downloading assets on internet-connected machine..."
   
   mkdir -p "$BUNDLE_DIR"
