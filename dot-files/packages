@@ -141,8 +141,103 @@ function install-packages {
  done
 }
 
-# Install packages begins here
+function cache-packages {
+
+ # Define the target cache directory
+ local target_dir="${XDG_CACHE_DIR:-$HOME/.cache}/apt-package-backups"
+
+ # 📁 Ensuring cache directory exists
+ mkdir -p "$target_dir"
+
+ # Change into the target directory so apt-get downloads the files directly here
+ pushd "$target_dir" >/dev/null || {
+  echo "Failed to access cache directory"
+  return 1
+ }
+
+ echo
+ echo "Caching packages..."
+
+ for item in "${packages[@]}"; do
+  # Split the string by colon to handle fallbacks
+  IFS=':' read -r -a parts <<<"$item"
+
+  if [[ ${#parts[@]} -eq 1 ]]; then
+   pkg_variations=("${parts[0]}")
+  else
+   # If there are colons, skip the binary name (index 0) and use the package names
+   pkg_variations=("${parts[@]:1}")
+  fi
+
+  local success=false
+
+  # Try downloading the package (and any fallbacks)
+  for pkg in "${pkg_variations[@]}"; do
+   # 'apt-get download' fetches the .deb into the current working directory
+   if apt-get download "$pkg" >/dev/null 2>&1; then
+    echo -e "✅ Cached: [\e[1;92m$pkg\e[0m]"
+    success=true
+    break # Move on to the next item in the main packages array once successful
+   else
+    echo -e "⚠️ Attempt to cache [\e[1;93m$pkg\e[0m] failed."
+   fi
+  done
+
+  if [ "$success" = false ]; then
+   echo -e "❌ \e[1;91mFailed completely to cache:\e[0m $item"
+  fi
+ done
+
+ # Return to the original directory
+ popd >/dev/null
+ echo "🏁 Caching Complete"
+}
+
+function install-cached {
+
+ # Accept an argument for the path, or default to the standard cache location
+ local cache_dir="${1:-${XDG_CACHE_DIR:-$HOME/.cache}/apt-package-backups}"
+
+ echo "📂 Checking for cached packages in: $cache_dir"
+
+ # 1. Verify the directory actually exists
+ if [[ ! -d "$cache_dir" ]]; then
+  echo -e "❌ \e[1;91mError:\e[0m Cache directory does not exist."
+  return 1
+ fi
+
+ # We use nullglob so if no files match, the array is empty instead of containing a literal "*.deb" string
+ shopt -s nullglob
+ local deb_files=("$cache_dir"/*.deb)
+ shopt -u nullglob # Turn nullglob back off to avoid messing with other script functions
+
+ # 3. Check if we actually found anything
+ if [[ ${#deb_files[@]} -eq 0 ]]; then
+  echo -e "⚠️ \e[1;93mNo .deb files found in the cache directory.\e[0m"
+  return 0
+ fi
+
+ echo "📦 Found ${#deb_files[@]} package(s). Starting bulk installation..."
+
+ # apt will attempt to fetch any missing dependencies automatically.
+ if sudo apt install -y "${deb_files[@]}"; then
+  echo -e "✅ \e[1;92mSuccessfully installed cached packages!\e[0m"
+  return 0
+ else
+  echo -e "❌ \e[1;91mErrors occurred during installation.\e[0m"
+  echo "   (If offline, this usually means a required dependency wasn't cached)."
+  return 1
+ fi
+}
+
+###########################################################
+#
+# MAIN ENTRY POINT
+#
+###########################################################
+
 install-packages
+cache-packages
 
 echo
 echo "--- 🚀 Starting Custom Installations ---"
