@@ -158,21 +158,36 @@ function knowledge {
   --explain "--font   : selected font name" \
   --explain "--filter : metal,border..."
 
- _formalize --app "Bash (inline hidden files)" \
-  --synopsis "Format all hidden files at current directory" \
-  --command 'for f in .*; do [ -f "$f" ] && shfmt -i 1 -w "$f"; done' \
-  --explain "shfmt  : shell format" \
-  --explain "-i     : indent by 1 space" \
-  --explain "-w     : write to file"
-
-  _formalize --app "Vim (NERDTree)" \
+ _formalize --app "Vim (NERDTree)" \
   --synopsis "Toggle the file browser sidebar" \
   --command ":NERDTreeToggle (Ctrl + n)" \
   --explain ":NERDTreeToggle : Command to open/close the tree" \
-  --explain "<C-n> : Common custom keybinding (Ctrl+n)" \
-  --explain "? : Press inside tree for help menu"
+  --explain "<C-n>           : Common custom keybinding (Ctrl+n)" \
+  --explain "?               : Press inside tree for help menu"
 
-  # PKI - Directory Scan
+ # VIM - Permissions
+ _formalize --app "Vim" \
+  --synopsis "Change permissions of the current file to executable" \
+  --command ":!chmod +x %" \
+  --explain "!    : Execute an external shell command" \
+  --explain "%    : Vim shorthand representing the current file path"
+
+ # VIM - Format
+ _formalize --app "Vim" \
+  --synopsis "Bash format the current file" \
+  --command ":%!shfmt -i 1" \
+  --explain "%    : Selects all lines in the file" \
+  --explain "!    : Filters the selected lines through an external command" \
+  --explain "-i 1 : shfmt flag to indent by 1 space"
+
+ # VIM - Delete All
+ _formalize --app "Vim" \
+  --synopsis "Delete entire contents of the current file" \
+  --command ":%d" \
+  --explain "%   : Range representing all lines in the file" \
+  --explain "d   : Delete command"
+
+ # PKI - Directory Scan
  _formalize --app "PKI (Directory Scan)" \
   --synopsis "Analyze all certificates and keys in a directory" \
   --command "pki ./certs" \
@@ -336,19 +351,6 @@ function knowledge {
   --command "ls /root; alert" \
   --explain "Exit Status : Checks \$? to determine success/failure" \
   --explain "Icon : Uses 'error' icon for non-zero exit status"
-
- # EXIT_SOUND
- _formalize --app "Exit Sound" \
-  --synopsis "Play an audio file in the background" \
-  --command "exit_sound" \
-  --explain "Audio : Plays /opt/audio/Megamanteleport.wav" \
-  --explain "Player : Uses 'mpv' in headless mode (--no-video)"
-
- _formalize --app "Exit Sound" \
-  --synopsis "Trigger sound after long-running task" \
-  --command "make build && exit_sound" \
-  --explain "Chaining : Uses && to run only on successful execution" \
-  --explain "Disown : Detaches audio process from the terminal"
 
  # CLEAN
  _formalize --app "Clean (APT)" \
