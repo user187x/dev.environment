@@ -32,7 +32,7 @@ RESOURCE_PATH["TMUX_DST"]="${CONFIG_HOME}/tmux"
 RESOURCE_PATH["TPM_SCRIPT"]="${RESOURCE_PATH[TMUX_DST]}/plugins/tpm/bin/install_plugins"
 
 # exports
-BASH_EXPORT="BASH_DEV_HOME"
+BASH_EXPORT_VAR="BASH_DEV_HOME"
 
 # Colors for logging
 GREEN='\e[92m'
@@ -80,12 +80,12 @@ preflight_check() {
  echo -e "${GRAY}Initializing Dev Environment${END}"
  echo
 
- if ! grep "${BASH_EXPORT}" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
+ if ! grep "${BASH_EXPORT_VAR}" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
 
-  EXPORT_CMD="${BASH_EXPORT}=\"${RESOURCE_PATH[DEV_SOFTWARE]}/bash\""
+  EXPORT_CMD="${BASH_EXPORT_VAR}=\"${RESOURCE_PATH[DEV_SOFTWARE]}/bash\""
   BASH_RC="${RESOURCE_PATH[BASHRC_DST]}"
 
-  echo -e "$INFO Adding ${GREEN}${BASH_EXPORT}${END} export to ${BASH_RC}"
+  echo -e "$INFO Adding ${GREEN}${BASH_EXPORT_VAR}${END} export to ${BASH_RC}"
 
   {
 
@@ -215,7 +215,7 @@ configure_bash() {
  for TARGET in "${TARGETS[@]}"; do
 
   TRANSLATED="${MAPPER[$TARGET]}"
-  ENTRY="\$${BASH_EXPORT}/${TARGET}"
+  ENTRY="\$${BASH_EXPORT_VAR}/${TARGET}"
 
   if ! grep "source $ENTRY" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
 
