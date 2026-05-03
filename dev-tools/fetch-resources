@@ -41,6 +41,8 @@ function get-path {
   fi
 }
 
+echo "Utilizing Git repository: ${GIT_URL}"
+
 FILES=($(curl -s "${API_URL}" | grep '"path"' | awk -F'"' '{print $4}'))
 
 OPTIONS=$(printf '%s\n' "${FILES[@]}" | fzf \
