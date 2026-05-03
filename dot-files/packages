@@ -508,7 +508,7 @@ function install-virtualbox {
  fi
 
  # Required for virutalization
- sudo apt install make gcc dkms build-essential libxcb-cursor0 linux-headers-$(uname -r) >/dev/null 2>&1
+ sudo apt install make gcc dkms build-essential libxcb-cursor0 qt6-wayland linux-headers-$(uname -r) >/dev/null 2>&1
 
  # 1. Detect OS
  local OS
