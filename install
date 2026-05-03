@@ -215,12 +215,11 @@ configure_bash() {
  for TARGET in "${TARGETS[@]}"; do
 
   TRANSLATED="${MAPPER[$TARGET]}"
-  #ENTRY="${RESOURCE_PATH[BASH_SRC]}/${TARGET}"
-  ENTRY="\$$BASH_EXPORT/${TARGET}"
+  ENTRY="\$${BASH_EXPORT}/${TARGET}"
 
   if ! grep "source $ENTRY" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
 
-   echo -e "$INFO ${GRAY}Adding source entry ${END}${YELLOW}$TARGET${END}${GRAY} to bashrc${END}"
+   echo -e "$INFO ${GRAY}Adding source entry ${END}${YELLOW}${TARGET}${END}${GRAY} to bashrc${END}"
 
    {
     echo "# Path to dev.environment $TARGET file"
@@ -260,7 +259,7 @@ main() {
  setup_tmux
 
  echo -e "Reloading shell configuration..."
- source "$HOME/.bashrc" || true
+ source "${RESOURCE_PATH[BASHRC_DST]}" || true
 
  echo
  echo -e "${GRAY}Setup Complete!${END}"
