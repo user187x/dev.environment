@@ -11,6 +11,9 @@ DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.local/cache}"
 CONFIG_HOME="${XDG_CONIG_HOME:-$HOME/.config}"
 
+# Used to store .bash_functions .bash_aliases and .bash_completions
+BASH_CONFIG_HOME="$CONFIG_HOME/bash"
+
 declare -A RESOURCE_PATH
 
 # resource source definitions
@@ -19,7 +22,7 @@ RESOURCE_PATH["FONT_SRC"]="$DEV_HOME/resources/fonts"
 RESOURCE_PATH["AUDIO_SRC"]="$DEV_HOME/resources/media/audio"
 RESOURCE_PATH["VIM_SRC"]="${RESOURCE_PATH[DEV_SOFTWARE]}/vim"
 RESOURCE_PATH["TMUX_SRC"]="${RESOURCE_PATH[DEV_SOFTWARE]}/tmux"
-RESOURCE_PATH["BASH_SRC"]="${RESOURCE_PATH[DEV_SOFTWARE]}/bash"
+RESOURCE_PATH["BASH_CONFIG_SRC"]="${RESOURCE_PATH[DEV_SOFTWARE]}/bash"
 RESOURCE_PATH["PKG_SCRIPT"]="${RESOURCE_PATH[BASH_SRC]}/packages"
 RESOURCE_PATH["BASHRC_SRC"]="${RESOURCE_PATH[BASH_SRC]}/bashrc"
 
@@ -32,7 +35,8 @@ RESOURCE_PATH["TMUX_DST"]="${CONFIG_HOME}/tmux"
 RESOURCE_PATH["TPM_SCRIPT"]="${RESOURCE_PATH[TMUX_DST]}/plugins/tpm/bin/install_plugins"
 
 # exports
-BASH_EXPORT_VAR="BASH_DEV_HOME"
+DEV_HOME_EXPORT="DEV_HOME"
+BASH_CONFIG_HOME_EXPORT="BASH_CONFIG_HOME"
 
 # Colors for logging
 GREEN='\e[92m'
@@ -68,34 +72,12 @@ preflight_check() {
  # Ensure sudo permissions upfront to prevent timeout
  sudo -v
 
- # Safety check for running Tmux
- if [[ -n "${TMUX:-}" ]]; then
-  echo
-  echo -e "$ERROR Terminate ${YELLOW}Tmux${END} process before proceeding"
-  echo
-  exit 1
- fi
-
  echo
  echo -e "${GRAY}Initializing Dev Environment${END}"
  echo
 
- if ! grep "${BASH_EXPORT_VAR}" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
+ configure_bash
 
-  EXPORT_CMD="${BASH_EXPORT_VAR}=\"${RESOURCE_PATH[DEV_SOFTWARE]}/bash\""
-  BASH_RC="${RESOURCE_PATH[BASHRC_DST]}"
-
-  echo -e "$INFO Adding ${GREEN}${BASH_EXPORT_VAR}${END} export to ${BASH_RC}"
-
-  {
-
-   echo 
-   echo "# Path to dev.environment directory"
-   echo "$EXPORT_CMD"
-
-  }>> "$BASH_RC"
-
- fi
 }
 
 link_resource() {
@@ -183,47 +165,92 @@ configure_bash() {
 
  echo -e "$INFO ${GRAY}Configuring Bash...${END}"
 
- declare -A MAPPER
+ BASH_CONFIG_FILES=(".bash_functions" ".bash_aliases" ".bash_completions")
 
- MAPPER["aliases"]=".bash_aliases"
- MAPPER["functions"]=".bash_functions"
- MAPPER["completions"]=".bash_completions"
- MAPPER["bashrc"]=".bashrc"
+ for file in "${BASH_CONFIG_FILES[@]}"; do
+  echo "Unlinking previous bash config file ${file}"
+  unlink "${BASH_CONFIG_HOME}/${file}" > /dev/null 2>&1
+ done
+
+ echo "Unlinking any existing .bashrc"
+ unlink "${RESOURCE_PATH[BASHRC_DST]}" > /dev/null 2>&1
+ echo "Unlink complete!"
+
+ echo "Relinking new .bashrc"
+ ln -s "${RESOURCE_PATH[BASHRC_SRC]}"  "${RESOURCE_PATH[BASHRC_DST]}" 
+ 
+ # Adding DEV_HOME export to .bashrc file
+ if ! grep "${DEV_HOME_EXPORT}" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
+
+  echo -e "$INFO Adding ${GREEN}${DEV_HOME_EXPORT}${END} export to ${RESOURCE_PATH[BASHRC_DST]}"
+  EXPORT_STMT="${DEV_HOME_EXPORT}=\"${DEV_HOME}\""
+  
+  {
+    echo
+    echo "# Path to dev.environment directory"
+    echo "${EXPORT_STMT}"
+
+  } >> "${RESOURCE_PATH[BASHRC_DST]}"
+
+ fi
+
+ # Adding bash references in the users .bashrc file
+ if ! grep "${BASH_CONFIG_HOME_EXPORT}" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
+
+  echo -e "$INFO Adding ${GREEN}${BASH_CONFIG_HOME_EXPORT}${END} export to ${RESOURCE_PATH[BASHRC_DST]}"
+  EXPORT_STMT="${BASH_CONFIG_HOME_EXPORT}=\"${RESOURCE_PATH[BASH_CONFIG_SRC]}"
+
+  {
+   echo 
+   echo "# Path to bash resource home directory"
+   echo "${EXPORT_CMD}"
+
+  } >> "${RESOURCE_PATH[BASHRC_DST]}"
+
+ fi
+
+ declare -A BASH_CONFIG_MAPPER
+
+ BASH_CONFIG_MAPPER["aliases"]=".bash_aliases"
+ BASH_CONFIG_MAPPER["functions"]=".bash_functions"
+ BASH_CONFIG_MAPPER["completions"]=".bash_completions"
 
  # Link dot files to user's $HOME directory
- for FILE in "${!MAPPER[@]}"; do
+ for FILE in "${!BASH_CONFIG_MAPPER[@]}"; do
 
-  RESOURCE_SRC="${RESOURCE_PATH[BASH_SRC]}/${FILE}"
+  RESOURCE_FILE="${RESOURCE_PATH[BASH_CONFIG_SRC]}/${FILE}"
 
-  if [[ ! -f "${RESOURCE_SRC}" ]]; then
-   echo -e "$ERROR Failure referencing source file: ${YELLOW}${RESOURCE_SRC}${END}"
+  if [[ ! -f "${RESOURCE_FILE}" ]]; then
+   echo -e "$ERROR Failure referencing source file: ${YELLOW}${RESOURCE_FILE}${END}"
    exit 1
   fi
 
-  RESOURCE_DST="${HOME}/${MAPPER[$FILE]}"
+  RESOURCE_DST="${HOME}/${BASH_CONFIG_MAPPER[$FILE]}"
 
-  link_resource "${RESOURCE_SRC}" "${RESOURCE_DST}"
-  echo -e "$INFO Sourcing script ${BLUE}$RESOURCE_DST${END}"
-  source "$RESOURCE_DST"
+  link_resource "${RESOURCE_FILE}" "${RESOURCE_DST}"
+
+  echo -e "$INFO Sourcing script ${BLUE}${RESOURCE_DST}${END}"
+  source "${RESOURCE_DST}"
+
  done
 
  echo "Completed linking bash resources"
  echo
 
- TARGETS=("aliases" "functions" "completions")
+ echo -e "Creating ${YELLOW}source${END} and ${YELLOW}export${END} entries in users .bashrc"
 
- for TARGET in "${TARGETS[@]}"; do
+ for FILE in "${!BASH_CONFIG_MAPPER[@]}"; do
 
-  TRANSLATED="${MAPPER[$TARGET]}"
-  ENTRY="\$${BASH_EXPORT_VAR}/${TARGET}"
+  # Using the existing var path and building upon it
+  BASH_CONFIG_FILE="\$${BASH_CONFIG_HOME_EXPORT}/${BASH_CONFIG_MAPPER[$FILE]}"
 
-  if ! grep "source $ENTRY" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
+  if ! grep "source ${BASH_CONFIG_FILE}" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
 
-   echo -e "$INFO ${GRAY}Adding source entry ${END}${YELLOW}${TARGET}${END}${GRAY} to bashrc${END}"
+   echo -e "$INFO ${GRAY}Adding source entry ${END}${YELLOW}${BASH_CONFIG_FILE}${END}${GRAY} to bashrc${END}"
 
    {
-    echo "# Path to dev.environment $TARGET file"
-    echo "source $ENTRY"
+    echo "# path to dev defined reource $file"
+    echo "source ${BASH_CONFIG_FILE}"
 
    } >> "${RESOURCE_PATH[BASHRC_DST]}"
 
@@ -231,12 +258,12 @@ configure_bash() {
  done
 
  if [[ ! -f "${RESOURCE_PATH[PKG_SCRIPT]}" ]]; then
-  echo -e "$ERROR Resource '${YELLOW}package${END}' was missing. Terminating..."
+  echo -e "$ERROR Resource '${YELLOW}${RESOURCE_PATH[PKG_SCRIPT]}${END}' was missing. Terminating..."
   exit 1
  else
-  echo -e "$INFO Package script '${BLUE}package${END}' found!"
+  echo -e "$INFO Package script '${BLUE}${RESOURCE_PATH[PKG_SCRIPT]}${END}' found!"
 
-  # Execute the script
+  # Execute the script to install packages
   ${RESOURCE_PATH["PKG_SCRIPT"]}
 
  fi
