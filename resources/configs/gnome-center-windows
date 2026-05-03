@@ -1,0 +1,13 @@
+%!/bin/bash
+
+echo "Configuring GNOME Window settings..."                                                                                                                                                   
+
+if command -v gsettings >/dev/null 2>&1; then                                                                                                                                                 
+ centered=$(gsettings get org.gnome.mutter center-new-windows)                                                                                                                                
+ if [[ "$centered" != "'true'" && "$centered" != "true" ]]; then                                                                                                                              
+  echo "Setting all windows to be centered!"                                                                                                                                                  
+  gsettings set org.gnome.mutter center-new-windows true                                                                                                                                      
+ fi                                                                                                                                                                                           
+fi   
+
+echo "Configuration settings for centering Gnome Windows complete"
