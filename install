@@ -80,20 +80,20 @@ preflight_check() {
  echo -e "${GRAY}Initializing Dev Environment${END}"
  echo
 
- if ! grep "DEV_BASH_SRC=" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
+ if ! grep "${BASH_EXPORT}" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
 
   EXPORT_CMD="${BASH_EXPORT}=\"${RESOURCE_PATH[DEV_SOFTWARE]}/bash\""
   BASH_RC="${RESOURCE_PATH[BASHRC_DST]}"
 
   echo -e "$INFO Adding ${GREEN}${BASH_EXPORT}${END} export to ${BASH_RC}"
-  # Write to .bashrc file
+
   {
 
    echo 
    echo "# Path to dev.environment directory"
    echo "$EXPORT_CMD"
 
-  } >> "$BASH_RC"
+  }>> "$BASH_RC"
 
  fi
 }
