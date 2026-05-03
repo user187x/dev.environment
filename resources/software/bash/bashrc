@@ -157,23 +157,18 @@ terminal_soundFx open
 # Trap Close Sound
 trap 'terminal_soundFx close' EXIT
 
-# Path to dev.environment directory
-export DEV_HOME=/home/xxx/dev.environment
-
-# Path to dev.environment aliases file
-source /home/xxx/dev.environment/dot-files/aliases
-
-# Path to dev.environment completions file
-source /home/xxx/dev.environment/dot-files/completions
-
-# Path to dev.environment functions file
-source /home/xxx/dev.environment/dot-files/functions
-
 MAVEN_HOME="/home/xxx/.local/share/apache-maven-3.9.15"
 
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:/home/xxx/.lmstudio/bin:$MAVEN_HOME/bin"
 
 export NVM_DIR="$HOME/.config/nvm"
-#[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-#[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+# Path to dev.environment directory
+BASH_DEV_HOME="/home/xxx/dev.environment/resources/software/bash"
+# Path to dev.environment aliases file
+source $BASH_DEV_HOME/aliases
+# Path to dev.environment functions file
+source $BASH_DEV_HOME/functions
+# Path to dev.environment completions file
+source $BASH_DEV_HOME/completions
