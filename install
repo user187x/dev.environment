@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # strict mode exit on error
-set -euo pipefail
+#set -euo pipefail
 
 # global constants
 DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,8 +23,8 @@ RESOURCE_PATH["AUDIO_SRC"]="$DEV_HOME/resources/media/audio"
 RESOURCE_PATH["VIM_SRC"]="${RESOURCE_PATH[DEV_SOFTWARE]}/vim"
 RESOURCE_PATH["TMUX_SRC"]="${RESOURCE_PATH[DEV_SOFTWARE]}/tmux"
 RESOURCE_PATH["BASH_CONFIG_SRC"]="${RESOURCE_PATH[DEV_SOFTWARE]}/bash"
-RESOURCE_PATH["PKG_SCRIPT"]="${RESOURCE_PATH[BASH_SRC]}/packages"
-RESOURCE_PATH["BASHRC_SRC"]="${RESOURCE_PATH[BASH_SRC]}/bashrc"
+RESOURCE_PATH["PKG_SCRIPT"]="${RESOURCE_PATH[BASH_CONFIG_SRC]}/packages"
+RESOURCE_PATH["BASHRC_SRC"]="${RESOURCE_PATH[BASH_CONFIG_SRC]}/bashrc"
 
 # resource destination definitions
 RESOURCE_PATH["VIM_DST"]="$HOME/.vim"
@@ -246,7 +246,7 @@ configure_bash() {
 
   if ! grep "source ${BASH_CONFIG_FILE}" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
 
-   echo -e "$INFO ${GRAY}Adding source entry ${END}${YELLOW}${BASH_CONFIG_FILE}${END}${GRAY} to bashrc${END}"
+   echo -e "$INFO ${GRAY}Adding source entry${END} ${YELLOW}$BASH_CONFIG_FILE${END} ${GRAY}to bashrc${END}"
 
    {
     echo "# path to dev defined reource $file"

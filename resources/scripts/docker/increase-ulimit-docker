@@ -1,0 +1,14 @@
+#!/bin/bash
+
+echo "Updating default limits"
+cat << EOF >>'/etc/docker/daemon.json' 
+{
+  "default-ulimits": {
+    "nofile": {
+      "Name": "nofile",
+      "Hard": 64000,
+      "Soft": 64000
+    }
+  }
+}
+EOF

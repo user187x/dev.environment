@@ -164,11 +164,12 @@ export PATH="$PATH:/home/xxx/.lmstudio/bin:$MAVEN_HOME/bin"
 
 export NVM_DIR="$HOME/.config/nvm"
 
-# Path to dev.environment directory
-BASH_DEV_HOME="/home/xxx/dev.environment/resources/software/bash"
-# Path to dev.environment aliases file
-source $BASH_DEV_HOME/aliases
-# Path to dev.environment functions file
-source $BASH_DEV_HOME/functions
-# Path to dev.environment completions file
-source $BASH_DEV_HOME/completions
+# path to bash resource directory
+BASH_CONFIG_HOME="$HOME/dev-environment/resources/software/bash"
+
+# path to dev defined reource .bash_completions
+source $HOME/.bash_aliases
+# path to dev defined reource .bash_completions
+source $HOME/.bash_functions
+# path to dev defined reource .bash_completions
+source $HOME/.bash_completions
