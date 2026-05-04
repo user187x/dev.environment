@@ -12,7 +12,6 @@
 # MINIKUBE_CPUS, MINIKUBE_MEMORY, MINIKUBE_DRIVER, CERT_DIR, etc.
 #
 # The script is safe to re-run: every step is idempotent and picks up where it left off.
-
 set -euo pipefail
 
 # ─── Defaults ────────────────────────────────────────────────────────────────
@@ -74,7 +73,6 @@ die() {
 usage() {
  cat <<EOF
 ${BLD}install-coder${RST} — Coder installer for Minikube.
-
 ${BLD}USAGE${RST}
     $0 [OPTIONS]
 
@@ -113,62 +111,20 @@ EOF
 # ─── Parse CLI ───────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
  case "$1" in
- --domain)
-  DOMAIN="$2"
-  shift 2
-  ;;
- --namespace)
-  NAMESPACE="$2"
-  shift 2
-  ;;
- --cpus)
-  MINIKUBE_CPUS="$2"
-  shift 2
-  ;;
- --memory)
-  MINIKUBE_MEMORY="$2"
-  shift 2
-  ;;
- --disk)
-  MINIKUBE_DISK="$2"
-  shift 2
-  ;;
- --driver)
-  MINIKUBE_DRIVER="$2"
-  shift 2
-  ;;
- --cert-dir)
-  CERT_DIR="$2"
-  shift 2
-  ;;
- --ingress-controller)
-  INGRESS_CONTROLLER="$2"
-  shift 2
-  ;;
- --skip-hosts)
-  SKIP_HOSTS=true
-  shift
-  ;;
- --skip-cli)
-  SKIP_CLI=true
-  shift
-  ;;
- --cli-install-dir)
-  CLI_INSTALL_DIR="$2"
-  shift 2
-  ;;
- -y | --yes)
-  ASSUME_YES=true
-  shift
-  ;;
- --status)
-  ACTION="status"
-  shift
-  ;;
- --uninstall)
-  ACTION="uninstall"
-  shift
-  ;;
+ --domain) DOMAIN="$2"; shift 2 ;;
+ --namespace) NAMESPACE="$2"; shift 2 ;;
+ --cpus) MINIKUBE_CPUS="$2"; shift 2 ;;
+ --memory) MINIKUBE_MEMORY="$2"; shift 2 ;;
+ --disk) MINIKUBE_DISK="$2"; shift 2 ;;
+ --driver) MINIKUBE_DRIVER="$2"; shift 2 ;;
+ --cert-dir) CERT_DIR="$2"; shift 2 ;;
+ --ingress-controller) INGRESS_CONTROLLER="$2"; shift 2 ;;
+ --skip-hosts) SKIP_HOSTS=true; shift ;;
+ --skip-cli) SKIP_CLI=true; shift ;;
+ --cli-install-dir) CLI_INSTALL_DIR="$2"; shift 2 ;;
+ -y | --yes) ASSUME_YES=true; shift ;;
+ --status) ACTION="status"; shift ;;
+ --uninstall) ACTION="uninstall"; shift ;;
  -h | --help) usage ;;
  *) die "Unknown option: $1 (try --help)" ;;
  esac
@@ -225,12 +181,6 @@ preflight() {
   Darwin) warn "Install with: brew install ${missing[*]}" ;;
   Linux) warn "Install via your package manager, e.g. apt-get / dnf / pacman" ;;
   esac
-  cat >&2 <<EOF
-    Docs:
-      https://minikube.sigs.k8s.io/docs/start/
-      https://kubernetes.io/docs/tasks/tools/
-      https://helm.sh/docs/intro/install/
-EOF
   exit 1
  fi
  ok "All required tools present (minikube, kubectl, helm, openssl, curl)"
@@ -246,8 +196,6 @@ EOF
  fi
  ok "Driver: ${MINIKUBE_DRIVER:-(minikube default)}"
 
- # macOS+docker is reachable but uses a private network; warn early so users
- # know to expect 'minikube tunnel' or driver swap if health check fails.
  if [[ "$OS" == "Darwin" && "$MINIKUBE_DRIVER" == "docker" ]]; then
   warn "macOS + docker driver: traffic uses an internal Docker network."
   warn "If the final health check fails, either:"
@@ -275,15 +223,13 @@ ensure_minikube() {
   ok "Minikube started"
  fi
 
- # Make sure kubectl points at this cluster — never assume the user's context.
  local ctx
  ctx="$(kubectl config current-context 2>/dev/null || true)"
  if [[ "$ctx" != "$MINIKUBE_PROFILE" ]]; then
   warn "kubectl context is '${ctx:-unset}', switching to '${MINIKUBE_PROFILE}'"
   kubectl config use-context "$MINIKUBE_PROFILE" >/dev/null
  fi
- kubectl cluster-info >/dev/null 2>&1 ||
-  die "Cannot reach Kubernetes API. Run 'minikube logs --problems' to debug."
+ kubectl cluster-info >/dev/null 2>&1 || die "Cannot reach Kubernetes API. Run 'minikube logs --problems' to debug."
  ok "kubectl context: $(kubectl config current-context)"
 }
 
@@ -293,8 +239,7 @@ generate_certs() {
  mkdir -p "$CERT_DIR"
 
  if [[ -f "$CERT_DIR/ca-cert.pem" && -f "$CERT_DIR/server.crt" && -f "$CERT_DIR/server.key" ]]; then
-  if openssl x509 -in "$CERT_DIR/server.crt" -text -noout 2>/dev/null |
-   grep -q "DNS:${DOMAIN}\b"; then
+  if openssl x509 -in "$CERT_DIR/server.crt" -text -noout 2>/dev/null | grep -q "DNS:${DOMAIN}\b"; then
    ok "Reusing existing certs in ${CERT_DIR}"
    return
   fi
@@ -322,7 +267,6 @@ subjectAltName=@alt_names
 DNS.1=${DOMAIN}
 DNS.2=*.${DOMAIN}
 EOF
-  # 825 days = max accepted by macOS/iOS; longer leaf certs get rejected.
   openssl x509 -req -in server.csr -CA ca-cert.pem -CAkey ca.key \
    -CAcreateserial -out server.crt -days 825 -sha256 \
    -extfile server-ext.cnf >/dev/null 2>&1
@@ -338,16 +282,13 @@ apply_secrets() {
 
  kubectl create secret tls "$TLS_SECRET" \
   --cert="$CERT_DIR/server.crt" --key="$CERT_DIR/server.key" \
-  --namespace="$NAMESPACE" --dry-run=client -o yaml |
-  kubectl apply -f - >/dev/null
+  --namespace="$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
  kubectl create secret generic "$CA_SECRET" \
   --from-file=ca.crt="$CERT_DIR/ca-cert.pem" \
-  --namespace="$NAMESPACE" --dry-run=client -o yaml |
-  kubectl apply -f - >/dev/null
+  --namespace="$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
  ok "TLS secret: $TLS_SECRET"
  ok "CA secret:  $CA_SECRET   ${DIM}(referenced by your main.tf)${RST}"
 
- # Random Postgres password — generated once, then reused.
  if ! kubectl get secret coder-pg-credentials -n "$NAMESPACE" >/dev/null 2>&1; then
   local pwd
   pwd="$(openssl rand -hex 24)"
@@ -382,7 +323,7 @@ metadata:
   labels: { app: postgres }
 spec:
   replicas: 1
-  strategy: { type: Recreate }   # PVC is RWO; rolling updates would deadlock
+  strategy: { type: Recreate }  
   selector:
     matchLabels: { app: postgres }
   template:
@@ -432,7 +373,6 @@ EOF
  kubectl rollout status deployment/postgres -n "$NAMESPACE" --timeout=300s
  ok "Postgres ready"
 
- # Build the connection-string secret Coder reads.
  local pg_user pg_pass pg_db
  pg_user=$(kubectl get secret coder-pg-credentials -n "$NAMESPACE" -o go-template='{{.data.username | base64decode}}')
  pg_pass=$(kubectl get secret coder-pg-credentials -n "$NAMESPACE" -o go-template='{{.data.password | base64decode}}')
@@ -478,20 +418,8 @@ EOF
  ok "Coder deployment ready"
 }
 
-# ─── Ingress (auto-detect: existing nginx, else install Traefik) ─────────────
-#
-# Two paths:
-#  • nginx:   reuse the cluster's existing ingress-nginx (e.g. minikube ingress
-#             addon). We do not install or modify it; we only add an Ingress
-#             resource for Coder using the nginx ingress class + annotations.
-#  • traefik: install Traefik via Helm into its own namespace, bind hostPort
-#             80/443, then add an Ingress resource using the traefik class.
-#
-# Detection:  --ingress-controller=auto picks nginx if a Deployment named
-#             ingress-nginx-controller exists in the ingress-nginx namespace,
-#             otherwise traefik. Override with --ingress-controller=nginx|traefik.
-
-INGRESS_MODE="" # resolved in install_ingress(), used by status/summary
+# ─── Ingress ─────────────────────────────────────────────────────────────────
+INGRESS_MODE=""
 
 install_ingress() {
  step "Ingress controller"
@@ -520,8 +448,7 @@ resolve_ingress_mode() {
   fi
   ;;
  nginx)
-  $nginx_present || die "--ingress-controller=nginx but ingress-nginx-controller is not running.
-   Enable the minikube addon first:  minikube addons enable ingress -p ${MINIKUBE_PROFILE}"
+  $nginx_present || die "--ingress-controller=nginx but ingress-nginx-controller is not running."
   INGRESS_MODE=nginx
   ok "Using existing ingress-nginx (forced by --ingress-controller=nginx)"
   ;;
@@ -532,35 +459,23 @@ resolve_ingress_mode() {
  esac
 }
 
-# Reuse path: don't touch the controller at all, just verify it looks healthy.
 use_existing_nginx() {
  log "Verifying ingress-nginx is ready…"
  kubectl rollout status deployment/ingress-nginx-controller \
-  -n ingress-nginx --timeout=120s >/dev/null ||
-  warn "ingress-nginx didn't report Ready in 120s — continuing anyway"
+  -n ingress-nginx --timeout=120s >/dev/null || warn "ingress-nginx didn't report Ready in 120s — continuing anyway"
 
- # Make sure an IngressClass named 'nginx' exists. The minikube addon ships
- # one, but custom installs sometimes use a different name; if so, the user
- # can edit the resource we apply below.
  if ! kubectl get ingressclass nginx >/dev/null 2>&1; then
   warn "No IngressClass named 'nginx' found. The Ingress we apply uses ingressClassName: nginx."
-  warn "If your controller uses a different class, edit the resource after install."
  fi
  ok "ingress-nginx looks ready"
 }
 
-# Install path: Traefik via Helm (only when nginx isn't already there).
 install_traefik() {
  helm repo add traefik https://traefik.github.io/charts >/dev/null 2>&1 || true
  helm repo update traefik >/dev/null
 
- # Detect any existing 'traefik' release in a namespace other than the one we
- # want. The most common cause is an older run of this script that put traefik
- # in the coder namespace; if we leave it there, hostPort 80/443 collide and
- # the new pod will sit in Pending forever with FailedScheduling.
  local stale_ns
- stale_ns=$(helm list -A 2>/dev/null |
-  awk -v want="$TRAEFIK_NAMESPACE" 'NR>1 && $1=="traefik" && $2!=want {print $2}')
+ stale_ns=$(helm list -A 2>/dev/null | awk -v want="$TRAEFIK_NAMESPACE" 'NR>1 && $1=="traefik" && $2!=want {print $2}')
  if [[ -n "$stale_ns" ]]; then
   while IFS= read -r ns; do
    [[ -z "$ns" ]] && continue
@@ -568,13 +483,11 @@ install_traefik() {
    helm uninstall traefik -n "$ns" --wait 2>/dev/null || true
   done <<<"$stale_ns"
   for _ in {1..30}; do
-   kubectl get pods -A -l app.kubernetes.io/name=traefik 2>/dev/null |
-    grep -q traefik || break
+   kubectl get pods -A -l app.kubernetes.io/name=traefik 2>/dev/null | grep -q traefik || break
    sleep 2
   done
  fi
 
- # Catch anything else holding hostPort 80/443 before Helm sits in --wait.
  local port_holder
  port_holder=$(kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\t"}{.spec.containers[*].ports[*].hostPort}{"\n"}{end}' 2>/dev/null |
   awk -F'\t' '$2 ~ /(^| )(80|443)( |$)/ {print $1}' |
@@ -585,8 +498,7 @@ install_traefik() {
   die "Either remove those, or re-run with --ingress-controller=nginx to use the existing controller."
  fi
 
- kubectl get ns "$TRAEFIK_NAMESPACE" >/dev/null 2>&1 ||
-  kubectl create namespace "$TRAEFIK_NAMESPACE"
+ kubectl get ns "$TRAEFIK_NAMESPACE" >/dev/null 2>&1 || kubectl create namespace "$TRAEFIK_NAMESPACE"
 
  log "helm upgrade --install traefik…"
  helm upgrade --install traefik traefik/traefik \
@@ -600,14 +512,11 @@ install_traefik() {
  ok "Traefik ready"
 }
 
-# Build the Ingress resource appropriate for whichever controller we resolved.
 apply_coder_ingress() {
  local ingress_class annotations
  case "$INGRESS_MODE" in
  nginx)
   ingress_class=nginx
-  # Coder needs unbounded body size (template uploads can be large) and
-  # long-lived connections for terminal/agent WebSockets.
   annotations=$(
    cat <<'EOF'
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
@@ -711,90 +620,117 @@ health_check() {
  warn "Coder did not return 200 within ~60s (last status: ${status:-no-response})"
  warn "Check pods:  kubectl get pods -n ${NAMESPACE}"
  warn "Tail logs:   kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/name=coder --tail=100"
- if [[ "$OS" == "Darwin" && "$MINIKUBE_DRIVER" == "docker" ]]; then
-  warn "On macOS+docker, try: 'minikube tunnel' in another terminal, then re-run --status."
+}
+
+# ─── Web Browser CA Trust ────────────────────────────────────────────────────
+trust_local_ca() {
+ step "Trusting Local CA"
+ local cert="$CERT_DIR/ca-cert.pem"
+ 
+ if [[ ! -f "$cert" ]]; then
+  warn "CA cert not found at $cert"
+  return
+ fi
+
+ log "Adding CA certificate to system trust stores (sudo prompt incoming)…"
+ 
+ case "$OS" in
+ Darwin)
+  if sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "$cert" >/dev/null 2>&1; then
+   ok "Added to macOS System Keychain"
+  else
+   warn "Failed to add to macOS Keychain"
+  fi
+  ;;
+ Linux)
+  if command -v update-ca-certificates >/dev/null 2>&1; then
+   sudo cp "$cert" /usr/local/share/ca-certificates/coder-local-ca.crt
+   sudo update-ca-certificates >/dev/null 2>&1
+   ok "Added to Debian/Ubuntu CA trust"
+  elif command -v update-ca-trust >/dev/null 2>&1; then
+   sudo cp "$cert" /etc/pki/ca-trust/source/anchors/coder-local-ca.crt
+   sudo update-ca-trust >/dev/null 2>&1
+   ok "Added to RHEL/Fedora CA trust"
+  fi
+  ;;
+ esac
+
+ log "Adding new CA certificate to web browsers to trust..."
+ if [[ -d "$HOME/.pki/nssdb" ]]; then
+  if ! command -v certutil > /dev/null 2>&1; then
+   log "Installing libnss3-tools for certutil…"
+   if command -v apt >/dev/null 2>&1; then
+    sudo apt update >/dev/null && sudo apt install -y libnss3-tools >/dev/null
+   fi
+  fi
+  
+  if command -v certutil > /dev/null 2>&1; then
+   if certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "CoderLocalCA" -i "$cert" >/dev/null 2>&1; then
+    ok "Successfully added new CA certifcate to nssdb"
+   else
+    warn "Failed adding CA certificate to nssdb"
+   fi
+  fi
  fi
 }
 
 # ─── Create Admin ────────────────────────────────────────────────────────────
 create_admin() {
+ local coder_bin="${CLI_PATH:-coder}"
 
- if command -v coder >/dev/null 2>&1; then
-
-  echo "Creating admin account..."
+ if [[ -x "$coder_bin" ]] || command -v "$coder_bin" >/dev/null 2>&1; then
+  log "Creating admin account..."
 
   ADMIN_USER="admin"
   ADMIN_EMAIL="admin@$DOMAIN"
   ADMIN_PASSWORD="Changeit1!"
+  
+  local tmp_log
+  tmp_log=$(mktemp)
 
-  if coder server create-admin-user --username "$ADMIN_USER" --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD"; then
+  # 1. Use CODER_TLS_NO_VERIFY in case local CA isn't fully trusted by Go yet.
+  # 2. Skip the enterprise trial prompt with --first-user-trial=false
+  # 3. Redirect stdin (</dev/null) so it instantly fails instead of hanging on unforeseen prompts.
+  if env CODER_TLS_NO_VERIFY=1 "$coder_bin" login "https://${DOMAIN}" \
+      --first-user-username "$ADMIN_USER" \
+      --first-user-email "$ADMIN_EMAIL" \
+      --first-user-password "$ADMIN_PASSWORD" \
+      --first-user-trial=false \
+      </dev/null >"$tmp_log" 2>&1; then
+   
+   ok "Admin account created!"
    echo
-   echo "Admin account created!"
+   echo "    Username  : $ADMIN_USER"
+   echo "    Email     : $ADMIN_EMAIL"
+   echo "    Password  : $ADMIN_PASSWORD"
    echo
-   echo "Username  : $ADMIN_USER"
-   echo "Email     : $ADMIN_EMAIL"
-   echo "Password  : $ADMIN_PASSWORD"
-   echo
+  else
+   warn "Failed to create admin account automatically (it might already exist)."
+   warn "Logs from the attempt:"
+   sed 's/^/    /' "$tmp_log" >&2
   fi
+  
+  rm -f "$tmp_log"
+ else
+  warn "Coder CLI not found; skipping admin creation."
  fi
 }
 
 # ─── Coder CLI ───────────────────────────────────────────────────────────────
-
-# Track what install_cli decided so the summary can adapt.
-CLI_PATH=""      # path the CLI ended up at (or "" if not installed)
-CLI_NEEDS_PATH=0 # 1 if CLI_INSTALL_DIR isn't already on PATH
+CLI_PATH=""
+CLI_NEEDS_PATH=0
 
 install_cli() {
-
  step "Coder CLI"
  if $SKIP_CLI; then
   warn "Skipping CLI install (--skip-cli)"
   return
  fi
 
- # Match the CLI version to the running server. Mismatched CLI/server can
- # cause subtle template-push and workspace-build failures.
- local target_ip server_version
-
- target_ip=$(minikube ip -p "$MINIKUBE_PROFILE")
- server_version=$(curl --cacert "$CERT_DIR/ca-cert.pem" \
-  --resolve "${DOMAIN}:443:${target_ip}" \
-  -fsSKL --max-time 10 \
-  "https://${DOMAIN}/api/v2/buildinfo" 2>/dev/null |
-  sed -n 's/.*"version":"v\?\([^"]*\)".*/\1/p' || true)
-
- create_admin
-
- if [[ -z "$server_version" ]]; then
-  warn "Couldn't read server version from /api/v2/buildinfo — skipping CLI install"
-  warn "Install manually later: curl -fsSkL https://${DOMAIN}/install.sh | sh"
-  return
- fi
-
- ok "Server version: v${server_version}"
-
- # If a coder CLI is already on PATH and matches, leave it alone — could be
- # Homebrew, apt, asdf, whatever. We only manage installs in CLI_INSTALL_DIR.
- local existing existing_version=""
- if existing=$(command -v coder 2>/dev/null); then
-  existing_version=$(coder version 2>/dev/null |
-   sed -n 's/^Coder v\([^ ]*\).*/\1/p' | head -n1)
-  if [[ "$existing_version" == "$server_version" ]]; then
-   ok "coder CLI already installed at ${existing} (v${existing_version})"
-   CLI_PATH="$existing"
-   return
-  fi
-  if [[ "$existing" != "${CLI_INSTALL_DIR}/coder" ]]; then
-   warn "Existing coder CLI at ${existing} is v${existing_version:-unknown}, server is v${server_version}"
-   warn "Leaving it in place (system-managed); installing matching version to ${CLI_INSTALL_DIR}"
-  fi
- fi
-
- # Map uname → Coder release archive naming.
- local arch_raw os_lc archive
+ local arch_raw os_lc arch target_ip url
  arch_raw="$(uname -m)"
  os_lc="$(echo "$OS" | tr '[:upper:]' '[:lower:]')"
+ 
  case "$arch_raw" in
  x86_64 | amd64) arch=amd64 ;;
  aarch64 | arm64) arch=arm64 ;;
@@ -805,125 +741,52 @@ install_cli() {
   ;;
  esac
  case "$os_lc" in
- linux | darwin) archive="coder_${server_version}_${os_lc}_${arch}.tar.gz" ;;
+ linux | darwin) ;;
  *)
   warn "Unsupported OS '${OS}' for auto CLI install — skipping"
   return
   ;;
  esac
 
- local url="https://github.com/coder/coder/releases/download/v${server_version}/${archive}"
+ target_ip=$(minikube ip -p "$MINIKUBE_PROFILE")
+ url="https://${DOMAIN}/bin/coder-${os_lc}-${arch}"
+
  mkdir -p "$CLI_INSTALL_DIR"
  local tmpdir
  tmpdir=$(mktemp -d)
  trap 'rm -rf "$tmpdir"' RETURN
 
- log "Downloading ${archive}…"
- if ! curl -fsSL --max-time 60 "$url" -o "$tmpdir/${archive}"; then
-  warn "Download failed from ${url}"
+ log "Downloading Coder CLI from its newly provisioned installation at ${url}…"
+ 
+ local success=false
+ # Retry loop: Coder's /healthz passes before the binary cache finishes extracting.
+ for i in {1..6}; do
+   if curl --cacert "$CERT_DIR/ca-cert.pem" --resolve "${DOMAIN}:443:${target_ip}" -fsSL --max-time 60 "$url" -o "$tmpdir/coder"; then
+     success=true
+     break
+   fi
+   warn "Download failed (Server may still be unpacking binaries). Retrying in 10s... ($i/6)"
+   sleep 10
+ done
+
+ if ! $success; then
+  err "Download completely failed from ${url}"
   warn "Install manually:  curl -L https://coder.com/install.sh | sh"
   return
  fi
- tar -xzf "$tmpdir/${archive}" -C "$tmpdir" coder ||
-  {
-   warn "Could not extract 'coder' from archive — skipping"
-   return
-  }
+ 
+ chmod +x "$tmpdir/coder"
  install -m 0755 "$tmpdir/coder" "${CLI_INSTALL_DIR}/coder"
  CLI_PATH="${CLI_INSTALL_DIR}/coder"
  ok "Installed to ${CLI_PATH}"
 
- # Verify it actually runs (catches glibc mismatches, broken downloads, etc).
- if ! "${CLI_PATH}" version >/dev/null 2>&1; then
-  warn "Installed binary doesn't run on this system — you may need a different arch/libc"
-  CLI_PATH=""
-  return
- fi
-
- # PATH check — if the install dir isn't on PATH, the user needs to add it.
  case ":${PATH}:" in
  *":${CLI_INSTALL_DIR}:"*) CLI_NEEDS_PATH=0 ;;
  *) CLI_NEEDS_PATH=1 ;;
  esac
-}
 
-# ─── Summary ─────────────────────────────────────────────────────────────────
-print_summary() {
- step "🎉 Done"
- cat <<EOF
-${GRN}${BLD}Coder is ready at:${RST}  ${BLD}https://${DOMAIN}${RST}
-
-${BLD}First-time setup${RST}
-  1. Open https://${DOMAIN} in your browser
-  2. Create the initial admin account on the welcome page
-  3. Trust the local CA so your browser stops warning:
-EOF
- case "$OS" in
- Darwin)
-  cat <<EOF
-     ${BLD}macOS keychain:${RST}
-       sudo security add-trusted-cert -d -r trustRoot \\
-         -k /Library/Keychains/System.keychain ${CERT_DIR}/ca-cert.pem
-EOF
-  ;;
- Linux)
-  cat <<EOF
-     ${BLD}Debian/Ubuntu:${RST}
-       sudo cp ${CERT_DIR}/ca-cert.pem /usr/local/share/ca-certificates/coder-local-ca.crt
-       sudo update-ca-certificates
-     ${BLD}RHEL/Fedora:${RST}
-       sudo cp ${CERT_DIR}/ca-cert.pem /etc/pki/ca-trust/source/anchors/coder-local-ca.crt
-       sudo update-ca-trust
-EOF
-  ;;
- esac
- cat <<EOF
-     Firefox uses its own store: import ${CERT_DIR}/ca-cert.pem under
-     Settings → Privacy & Security → Certificates → Authorities → Import.
-
-${BLD}Coder CLI quickstart${RST}
-EOF
- if [[ -n "$CLI_PATH" && $CLI_NEEDS_PATH -eq 0 ]]; then
-  cat <<EOF
-  ${GRN}✓ Installed:${RST} ${CLI_PATH}
-  coder login https://${DOMAIN}
-  coder templates push my-template -d /path/to/template
-EOF
- elif [[ -n "$CLI_PATH" && $CLI_NEEDS_PATH -eq 1 ]]; then
-  local shell_rc
-  case "${SHELL##*/}" in
-  zsh) shell_rc="~/.zshrc" ;;
-  bash) shell_rc="~/.bashrc" ;;
-  fish) shell_rc="~/.config/fish/config.fish" ;;
-  *) shell_rc="your shell rc" ;;
-  esac
-  cat <<EOF
-  ${GRN}✓ Installed:${RST} ${CLI_PATH}
-  ${YLW}!${RST} ${CLI_INSTALL_DIR} is not on your PATH. Add it:
-       echo 'export PATH="${CLI_INSTALL_DIR}:\$PATH"' >> ${shell_rc}
-       source ${shell_rc}
-  Or run with the full path:
-       ${CLI_PATH} login https://${DOMAIN}
-EOF
- else
-  cat <<EOF
-  ${YLW}CLI not auto-installed${RST} — install it manually:
-       curl -L https://coder.com/install.sh | sh
-  Then:
-       coder login https://${DOMAIN}
-EOF
- fi
- cat <<EOF
-
-${BLD}Useful commands${RST}
-  $0 --status                                       show status
-  $0 --uninstall                                    tear it all down
-  kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/name=coder -f
-  kubectl get pods,svc,ingress -n ${NAMESPACE}
-
-${DIM}Note: your main.tf references the secret '${CA_SECRET}' for workspace
-CA trust — keep --domain consistent with that name.${RST}
-EOF
+ # Invoke admin creation directly after a successful CLI download
+ create_admin
 }
 
 # ─── Status ──────────────────────────────────────────────────────────────────
@@ -970,10 +833,6 @@ do_uninstall() {
  fi
 
  helm uninstall coder -n "$NAMESPACE" 2>/dev/null || true
- # Uninstall every traefik release we can find — old runs may have put it in
- # the coder namespace, newer runs use a dedicated traefik namespace.
- # Note: ingress-nginx is NEVER touched here; if you used the nginx path, the
- # controller (and any other apps using it) stay running.
  while IFS= read -r ns; do
   [[ -z "$ns" ]] && continue
   helm uninstall traefik -n "$ns" 2>/dev/null || true
@@ -993,6 +852,62 @@ do_uninstall() {
  ok "Uninstall complete."
  warn "Minikube cluster left running. Delete with: minikube delete -p ${MINIKUBE_PROFILE}"
  warn "Cert directory left in place: ${CERT_DIR} (rm -rf to remove)"
+}
+
+# ─── Summary ─────────────────────────────────────────────────────────────────
+print_summary() {
+ step "🎉 Done"
+ cat <<EOF
+${GRN}${BLD}Coder is ready at:${RST}  ${BLD}https://${DOMAIN}${RST}
+
+${BLD}First-time setup${RST}
+  1. Open https://${DOMAIN} in your browser
+  2. Login with the Admin credentials listed above!
+
+${BLD}Coder CLI quickstart${RST}
+EOF
+ if [[ -n "$CLI_PATH" && $CLI_NEEDS_PATH -eq 0 ]]; then
+  cat <<EOF
+  ${GRN}✓ Installed:${RST} ${CLI_PATH}
+  coder login https://${DOMAIN}
+  coder templates push my-template -d /path/to/template
+EOF
+ elif [[ -n "$CLI_PATH" && $CLI_NEEDS_PATH -eq 1 ]]; then
+  local shell_rc
+  case "${SHELL##*/}" in
+  zsh) shell_rc="~/.zshrc" ;;
+  bash) shell_rc="~/.bashrc" ;;
+  fish) shell_rc="~/.config/fish/config.fish" ;;
+  *) shell_rc="your shell rc" ;;
+  esac
+  cat <<EOF
+  ${GRN}✓ Installed:${RST} ${CLI_PATH}
+  ${YLW}!${RST} ${CLI_INSTALL_DIR} is not on your PATH.
+  Add it:
+       echo 'export PATH="${CLI_INSTALL_DIR}:\$PATH"' >> ${shell_rc}
+       source ${shell_rc}
+  Or run with the full path:
+       ${CLI_PATH} login https://${DOMAIN}
+EOF
+ else
+  cat <<EOF
+  ${YLW}CLI not auto-installed${RST} — install it manually:
+       curl -L https://coder.com/install.sh | sh
+  Then:
+       coder login https://${DOMAIN}
+EOF
+ fi
+ cat <<EOF
+
+${BLD}Useful commands${RST}
+  $0 --status                                       show status
+  $0 --uninstall                                    tear it all down
+  kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/name=coder -f
+  kubectl get pods,svc,ingress -n ${NAMESPACE}
+
+${DIM}Note: your main.tf references the secret '${CA_SECRET}' for workspace
+CA trust — keep --domain consistent with that name.${RST}
+EOF
 }
 
 # ─── Banner ──────────────────────────────────────────────────────────────────
@@ -1023,6 +938,7 @@ install)
  install_ingress
  update_hosts
  health_check
+ trust_local_ca
  install_cli
  print_summary
  ;;
