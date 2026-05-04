@@ -9,6 +9,7 @@
 | `:clo[se]` | Close current pane |
 | `:ter[minal]` | Open a terminal window |
 | `K` | Open man page for word under the cursor |
+| `KK` | Save write and exit |
 
 > 💡 **Tip:** Run `vimtutor` in a terminal to learn the first Vim commands.
 
@@ -272,6 +273,7 @@
 | Command | Description |
 |---|---|
 | `:w` | Write (save) the file, but don't exit |
+| `:x` | Write (save) the file and exit |
 | `:w !sudo tee %` | Write out the current file using sudo |
 | `:wq` or `:x` or `ZZ` | Write (save) and quit |
 | `:q` | Quit (fails if there are unsaved changes) |
