@@ -75,6 +75,7 @@ packages=(
  "sysvbanner"
  "xclip"
  "7zip"
+ "libnss3-tools"
  "wl-clipboard"
  "unrar"
  "util-linux-extra"
