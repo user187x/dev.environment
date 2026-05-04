@@ -4,7 +4,7 @@ docker build -t custom-ubuntu-vnc:latest .
 
 echo "Now we can add the following"
 
-cat << EOF > terraform-patch.tf
+cat <<EOF >terraform-patch.tf
 container {
           name              = "dev"
           image             = "custom-ubuntu-vnc:latest" # Use our new baked image

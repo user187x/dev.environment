@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# exit immediately
+set -e
+
+ENV="minikube"
+IMAGE="coder-filebrowser"
+TAG="latest"
+
+if [[ "$ENV" == "minikube" ]]; then
+ echo "Building image for Minikube use..."
+ minikube image build -t "$IMAGE":"$TAG" .
+else
+ echo "Building image: $IMAGE:$TAG"
+ docker image build -t "$IMAGE":"$TAG" .
+fi
