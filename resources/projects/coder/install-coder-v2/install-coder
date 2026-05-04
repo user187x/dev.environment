@@ -4,7 +4,7 @@
 #
 # Quick start:
 #   ./install-coder                                    # install with defaults
-#   ./install-coder --domain coder.local --cpus 6     # custom config
+#   ./install-coder --domain coder.local --cpus 6      # custom config
 #   ./install-coder --status                           # show running components
 #   ./install-coder --uninstall                        # tear it all down
 #
@@ -35,6 +35,8 @@ MINIKUBE_DRIVER="${MINIKUBE_DRIVER:-}" # auto-detect if blank
 INGRESS_CONTROLLER="${INGRESS_CONTROLLER:-auto}"
 
 SKIP_HOSTS="${SKIP_HOSTS:-false}"
+SKIP_CLI="${SKIP_CLI:-false}"
+CLI_INSTALL_DIR="${CLI_INSTALL_DIR:-$HOME/.local/bin}"
 ASSUME_YES="${ASSUME_YES:-false}"
 ACTION="install"
 
@@ -71,7 +73,7 @@ die() {
 # ─── Usage ───────────────────────────────────────────────────────────────────
 usage() {
  cat <<EOF
-${BLD}install-coder${RST} — zero-to-hero Coder installer for Minikube.
+${BLD}install-coder${RST} — Coder installer for Minikube.
 
 ${BLD}USAGE${RST}
     $0 [OPTIONS]
@@ -91,6 +93,9 @@ ${BLD}OPTIONS${RST}
                           nginx   — use existing ingress-nginx (fail if absent)
                           traefik — install Traefik (fails if 80/443 are taken)
     --skip-hosts        Don't modify /etc/hosts
+    --skip-cli          Don't install the coder CLI
+    --cli-install-dir <path>
+                        Where to drop the coder CLI       (default: ${CLI_INSTALL_DIR})
     -y, --yes           Skip confirmation prompts (for CI)
     --status            Show component status and exit
     --uninstall         Remove everything (releases, namespaces, /etc/hosts entry)
@@ -143,6 +148,14 @@ while [[ $# -gt 0 ]]; do
  --skip-hosts)
   SKIP_HOSTS=true
   shift
+  ;;
+ --skip-cli)
+  SKIP_CLI=true
+  shift
+  ;;
+ --cli-install-dir)
+  CLI_INSTALL_DIR="$2"
+  shift 2
   ;;
  -y | --yes)
   ASSUME_YES=true
@@ -203,7 +216,7 @@ preflight() {
  step "Pre-flight checks"
 
  local missing=()
- for cmd in minikube kubectl helm openssl curl; do
+ for cmd in minikube kubectl helm openssl curl tar; do
   command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
  done
  if ((${#missing[@]} > 0)); then
@@ -703,6 +716,137 @@ health_check() {
  fi
 }
 
+# ─── Create Admin ────────────────────────────────────────────────────────────
+create_admin() {
+
+ if command -v coder >/dev/null 2>&1; then
+
+  echo "Creating admin account..."
+
+  ADMIN_USER="admin"
+  ADMIN_EMAIL="admin@$DOMAIN"
+  ADMIN_PASSWORD="Changeit1!"
+
+  if coder server create-admin-user --username "$ADMIN_USER" --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD"; then
+   echo
+   echo "Admin account created!"
+   echo
+   echo "Username  : $ADMIN_USER"
+   echo "Email     : $ADMIN_EMAIL"
+   echo "Password  : $ADMIN_PASSWORD"
+   echo
+  fi
+ fi
+}
+
+# ─── Coder CLI ───────────────────────────────────────────────────────────────
+
+# Track what install_cli decided so the summary can adapt.
+CLI_PATH=""      # path the CLI ended up at (or "" if not installed)
+CLI_NEEDS_PATH=0 # 1 if CLI_INSTALL_DIR isn't already on PATH
+
+install_cli() {
+
+ step "Coder CLI"
+ if $SKIP_CLI; then
+  warn "Skipping CLI install (--skip-cli)"
+  return
+ fi
+
+ # Match the CLI version to the running server. Mismatched CLI/server can
+ # cause subtle template-push and workspace-build failures.
+ local target_ip server_version
+
+ target_ip=$(minikube ip -p "$MINIKUBE_PROFILE")
+ server_version=$(curl --cacert "$CERT_DIR/ca-cert.pem" \
+  --resolve "${DOMAIN}:443:${target_ip}" \
+  -fsSKL --max-time 10 \
+  "https://${DOMAIN}/api/v2/buildinfo" 2>/dev/null |
+  sed -n 's/.*"version":"v\?\([^"]*\)".*/\1/p' || true)
+
+ create_admin
+
+ if [[ -z "$server_version" ]]; then
+  warn "Couldn't read server version from /api/v2/buildinfo — skipping CLI install"
+  warn "Install manually later: curl -fsSkL https://${DOMAIN}/install.sh | sh"
+  return
+ fi
+
+ ok "Server version: v${server_version}"
+
+ # If a coder CLI is already on PATH and matches, leave it alone — could be
+ # Homebrew, apt, asdf, whatever. We only manage installs in CLI_INSTALL_DIR.
+ local existing existing_version=""
+ if existing=$(command -v coder 2>/dev/null); then
+  existing_version=$(coder version 2>/dev/null |
+   sed -n 's/^Coder v\([^ ]*\).*/\1/p' | head -n1)
+  if [[ "$existing_version" == "$server_version" ]]; then
+   ok "coder CLI already installed at ${existing} (v${existing_version})"
+   CLI_PATH="$existing"
+   return
+  fi
+  if [[ "$existing" != "${CLI_INSTALL_DIR}/coder" ]]; then
+   warn "Existing coder CLI at ${existing} is v${existing_version:-unknown}, server is v${server_version}"
+   warn "Leaving it in place (system-managed); installing matching version to ${CLI_INSTALL_DIR}"
+  fi
+ fi
+
+ # Map uname → Coder release archive naming.
+ local arch_raw os_lc archive
+ arch_raw="$(uname -m)"
+ os_lc="$(echo "$OS" | tr '[:upper:]' '[:lower:]')"
+ case "$arch_raw" in
+ x86_64 | amd64) arch=amd64 ;;
+ aarch64 | arm64) arch=arm64 ;;
+ armv7l) arch=armv7 ;;
+ *)
+  warn "Unknown CPU arch '${arch_raw}' — skipping CLI install"
+  return
+  ;;
+ esac
+ case "$os_lc" in
+ linux | darwin) archive="coder_${server_version}_${os_lc}_${arch}.tar.gz" ;;
+ *)
+  warn "Unsupported OS '${OS}' for auto CLI install — skipping"
+  return
+  ;;
+ esac
+
+ local url="https://github.com/coder/coder/releases/download/v${server_version}/${archive}"
+ mkdir -p "$CLI_INSTALL_DIR"
+ local tmpdir
+ tmpdir=$(mktemp -d)
+ trap 'rm -rf "$tmpdir"' RETURN
+
+ log "Downloading ${archive}…"
+ if ! curl -fsSL --max-time 60 "$url" -o "$tmpdir/${archive}"; then
+  warn "Download failed from ${url}"
+  warn "Install manually:  curl -L https://coder.com/install.sh | sh"
+  return
+ fi
+ tar -xzf "$tmpdir/${archive}" -C "$tmpdir" coder ||
+  {
+   warn "Could not extract 'coder' from archive — skipping"
+   return
+  }
+ install -m 0755 "$tmpdir/coder" "${CLI_INSTALL_DIR}/coder"
+ CLI_PATH="${CLI_INSTALL_DIR}/coder"
+ ok "Installed to ${CLI_PATH}"
+
+ # Verify it actually runs (catches glibc mismatches, broken downloads, etc).
+ if ! "${CLI_PATH}" version >/dev/null 2>&1; then
+  warn "Installed binary doesn't run on this system — you may need a different arch/libc"
+  CLI_PATH=""
+  return
+ fi
+
+ # PATH check — if the install dir isn't on PATH, the user needs to add it.
+ case ":${PATH}:" in
+ *":${CLI_INSTALL_DIR}:"*) CLI_NEEDS_PATH=0 ;;
+ *) CLI_NEEDS_PATH=1 ;;
+ esac
+}
+
 # ─── Summary ─────────────────────────────────────────────────────────────────
 print_summary() {
  step "🎉 Done"
@@ -738,8 +882,38 @@ EOF
      Settings → Privacy & Security → Certificates → Authorities → Import.
 
 ${BLD}Coder CLI quickstart${RST}
+EOF
+ if [[ -n "$CLI_PATH" && $CLI_NEEDS_PATH -eq 0 ]]; then
+  cat <<EOF
+  ${GRN}✓ Installed:${RST} ${CLI_PATH}
   coder login https://${DOMAIN}
   coder templates push my-template -d /path/to/template
+EOF
+ elif [[ -n "$CLI_PATH" && $CLI_NEEDS_PATH -eq 1 ]]; then
+  local shell_rc
+  case "${SHELL##*/}" in
+  zsh) shell_rc="~/.zshrc" ;;
+  bash) shell_rc="~/.bashrc" ;;
+  fish) shell_rc="~/.config/fish/config.fish" ;;
+  *) shell_rc="your shell rc" ;;
+  esac
+  cat <<EOF
+  ${GRN}✓ Installed:${RST} ${CLI_PATH}
+  ${YLW}!${RST} ${CLI_INSTALL_DIR} is not on your PATH. Add it:
+       echo 'export PATH="${CLI_INSTALL_DIR}:\$PATH"' >> ${shell_rc}
+       source ${shell_rc}
+  Or run with the full path:
+       ${CLI_PATH} login https://${DOMAIN}
+EOF
+ else
+  cat <<EOF
+  ${YLW}CLI not auto-installed${RST} — install it manually:
+       curl -L https://coder.com/install.sh | sh
+  Then:
+       coder login https://${DOMAIN}
+EOF
+ fi
+ cat <<EOF
 
 ${BLD}Useful commands${RST}
   $0 --status                                       show status
@@ -849,6 +1023,7 @@ install)
  install_ingress
  update_hosts
  health_check
+ install_cli
  print_summary
  ;;
 status) do_status ;;
