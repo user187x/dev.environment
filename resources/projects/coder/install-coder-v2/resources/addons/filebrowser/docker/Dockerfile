@@ -9,10 +9,18 @@ COPY ./files/filebrowser /opt/filebrowser
 # Ensure the binary is executable
 RUN chmod +x /opt/filebrowser
 
-# Create the standard Coder user (UID 1000) and grant passwordless sudo
-RUN useradd -m -s /bin/bash -u 1000 coder && echo "coder ALL=(ALL) NOPASSWD:ALL" >>/etc/sudoers
+ENV CODER_USER="coder"
+
+# Remove default image user
+RUN userdel -r ubuntu
+
+# Add default coder user
+RUN useradd -m -s /bin/bash -u 1000 "$CODER_USER"
+
+# Update coders suder permissions
+RUN echo "$CODER_USER ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Set the default user and working directory
-USER coder
+USER "$CODER_USER"
 
 WORKDIR /home/coder
