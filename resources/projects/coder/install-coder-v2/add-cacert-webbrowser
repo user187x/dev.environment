@@ -1,0 +1,19 @@
+#!/bin/bash
+
+echo "Adding new ca certificate to web browsers to trust"
+echo
+read -e -r -p "Enter path to server CA PEM : " cert
+
+if [[ -f "$cert" ]]; then
+
+ if ! command -v certutil > /dev/null 2>&1; then
+  sudo apt install libnss3-tools 
+ fi
+
+ if certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "MyCert" -i "$cert"; then
+  echo "Successfully added new ca certifcate: $cert"
+ else
+  echo "Failed adding ca certificate to nssdb"
+ fi
+
+fi
