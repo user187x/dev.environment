@@ -9,7 +9,7 @@ DEV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # system resource directories
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.local/cache}"
-CONFIG_HOME="${XDG_CONIG_HOME:-$HOME/.config}"
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}" # Fixed: XDG_CONIG_HOME -> XDG_CONFIG_HOME
 
 # Used to store .bash_functions .bash_aliases and .bash_completions
 BASH_CONFIG_HOME="$CONFIG_HOME/bash"
@@ -58,38 +58,35 @@ QESTN="(${BLUE}?${END})"
 # ==========================================
 
 preflight_check() {
-
- echo
- echo -e "$INFO Checking referential integrity..."
- echo
-
- for RESOURCE in "${!RESOURCE_PATH[@]}"; do
-  if [[ ! -x "${RESOURCE_PATH[$RESOURCE]}" ]]; then
-   echo -e "$ERROR Resource not found: ${YELLOW}$RESOURCE${END}=${WHITE}${RESOURCE_PATH[$RESOURCE]}${END}"
-  fi
- done
-
+ 
  # Ensure sudo permissions upfront to prevent timeout
  sudo -v
 
  echo
- echo -e "${GRAY}Initializing Dev Environment${END}"
+ echo -e "Checking referential integrity..."
  echo
 
- configure_bash
+ for RESOURCE in "${!RESOURCE_PATH[@]}"; do
+  if [[ ! -e "${RESOURCE_PATH[$RESOURCE]}" ]]; then
+   echo -e "$ERROR Resource not found: ${YELLOW}$RESOURCE${END}=${WHITE}${RESOURCE_PATH[$RESOURCE]}${END}"
+  fi
+ done
 
+ echo
+ echo -e "${GRAY}Initializing Dev Environment${END}"
+ echo
 }
 
-link_resource() {
+function link_resource {
 
  local SRC_RESOURCE="$1"
  local DST_RESOURCE="$2"
 
  local DST_PATH=$(dirname "$DST_RESOURCE")
- echo -e "${INFO} Ensuring path integrity: ${GRAY}${DST_PATH}${END}"
+ echo -e "$INFO Ensuring path integrity: ${GRAY}${DST_PATH}${END}"
  mkdir -p "$DST_PATH"
 
- echo -e "${INFO} Removing/Unlinking any existing resources: ${WHITE}${DST_PATH}${END}"
+ echo -e "$INFO Removing/Unlinking any existing resources: ${WHITE}${DST_PATH}${END}"
  if [[ -e "$DST_RESOURCE" || -L "$DST_RESOURCE" ]]; then
   rm -rf "$DST_RESOURCE"
  fi
@@ -98,12 +95,12 @@ link_resource() {
  echo -e "${INFO} ${GREEN}Linked${END}: ${WHITE}${DST_RESOURCE}${END} -> ${GREEN}${SRC_RESOURCE}${END}"
 }
 
-install_fonts() {
+function install_fonts {
 
  echo -e "Installing fonts..."
 
  # Ensure destination directory exists
- echo -e "${GRAY}Ensuring desitination path exists :${END} ${WHITE} ${RESOURCE_PATH[FONT_DST]} ${END}"
+ echo -e "$INFO Ensuring desitination path exists :${GREEN} ${RESOURCE_PATH[FONT_DST]} ${END}"
  mkdir -p "${RESOURCE_PATH[FONT_DST]}"
 
  echo -e "${GRAY}"
@@ -115,16 +112,15 @@ install_fonts() {
   echo -e "${WHITE}Font cache updated.${END}"
  else
   echo -e "${YELLOW}fc-cache not found, attempting to install...${END}"
-  if sudo apt install fc-cache &>/dev/null; then
+  if sudo apt install -y fontconfig &>/dev/null; then
    fc-cache -f
   fi
  fi
 }
 
-install_resources() {
+function install_resources {
 
- echo
- echo -e "${WHITE}Installing resources...${END}"
+ echo -e "Installing resources..."
 
  echo -e "${GRAY}Ensuring desitination path exists :${END} ${WHITE} ${RESOURCE_PATH[AUDIO_DST]} ${END}"
  mkdir -p "${RESOURCE_PATH[AUDIO_DST]}"
@@ -136,9 +132,9 @@ install_resources() {
  echo -e "$INFO Audio resources installed to ${GREEN}${RESOURCE_PATH[AUDIO_DST]}${END}"
 }
 
-setup_tmux() {
+function setup_tmux {
 
- echo -e "${GRAY}Configuring Tmux...${END}"
+ echo -e "Configuring Tmux..."
 
  # Link the main configuration directory
  link_resource "${RESOURCE_PATH[TMUX_SRC]}" "${RESOURCE_PATH[TMUX_DST]}"
@@ -149,65 +145,84 @@ setup_tmux() {
 
   # Running inside a subshell to avoid directory changing side-effects
   ("${RESOURCE_PATH[TPM_SCRIPT]}")
+
  else
   echo -e "$ERROR TPM installer not found at path: ${RESOURCE_PATH[TPM_SCRIPT]}"
   exit 1
  fi
 }
 
-setup_vim() {
+function setup_vim {
 
- echo -e "$INFO ${GRAY}Configuring Vim...${END}"
+ echo -e "Configuring Vim..."
  link_resource "${RESOURCE_PATH[VIM_SRC]}" "${RESOURCE_PATH[VIM_DST]}"
 }
 
-configure_bash() {
+function install_packages {
+ 
+ if [[ ! -f "${RESOURCE_PATH[PKG_SCRIPT]}" ]]; then
+  echo -e "$ERROR Resource '${YELLOW}${RESOURCE_PATH[PKG_SCRIPT]}${END}' was missing. Terminating..."
+  exit 1
+ else
+  echo -e "$INFO Package script found '${BLUE}${RESOURCE_PATH[PKG_SCRIPT]}${END}' ✅"
+  ${RESOURCE_PATH["PKG_SCRIPT"]}
+ fi
+}
 
- echo -e "$INFO ${GRAY}Configuring Bash...${END}"
+function configure_bash {
+
+ echo -e "Configuring Bash..."
 
  BASH_CONFIG_FILES=(".bash_functions" ".bash_aliases" ".bash_completions")
 
  for file in "${BASH_CONFIG_FILES[@]}"; do
-  echo "Unlinking previous bash config file ${file}"
-  unlink "${BASH_CONFIG_HOME}/${file}" > /dev/null 2>&1
+  echo -e "$INFO ${GRAY}Unlinking previous bash config file ${file}${END}"
+  unlink "${BASH_CONFIG_HOME}/${file}" >/dev/null 2>&1
+  echo -e "$INFO Unlink complete ✅"
  done
 
- echo "Unlinking any existing .bashrc"
- unlink "${RESOURCE_PATH[BASHRC_DST]}" > /dev/null 2>&1
- echo "Unlink complete!"
+ echo -e "$INFO ${GRAY}Unlinking any existing .bashrc${END}"
+ unlink "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1
+ echo -e "$INFO Unlink complete ✅"
 
- echo "Relinking new .bashrc"
- ln -s "${RESOURCE_PATH[BASHRC_SRC]}"  "${RESOURCE_PATH[BASHRC_DST]}" 
- 
- # Adding DEV_HOME export to .bashrc file
+ echo -e "$INFO ${GRAY}Relinking .bashrc${END}"
+ ln -s "${RESOURCE_PATH[BASHRC_SRC]}" "${RESOURCE_PATH[BASHRC_DST]}"
+ echo -e "$INFO Relinked ${RESOURCE_PATH[BASHRC_DST]} ✅"
+
+ # Adding 'DEV_HOME' export to .bashrc file
  if ! grep "${DEV_HOME_EXPORT}" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
 
   echo -e "$INFO Adding ${GREEN}${DEV_HOME_EXPORT}${END} export to ${RESOURCE_PATH[BASHRC_DST]}"
   EXPORT_STMT="${DEV_HOME_EXPORT}=\"${DEV_HOME}\""
-  
-  {
-    echo
-    echo "# Path to dev.environment directory"
-    echo "${EXPORT_STMT}"
 
-  } >> "${RESOURCE_PATH[BASHRC_DST]}"
+  echo -e "$INFO Inserting export: ${YELLOW}$EXPORT_STMT${END}"
+  {
+   echo
+   echo "# Path to dev.environment directory"
+   echo "${EXPORT_STMT}"
+
+  } >>"${RESOURCE_PATH[BASHRC_DST]}"
 
  fi
 
- # Adding bash references in the users .bashrc file
+ # Adding bash resource directory path in the users .bashrc file
  if ! grep "${BASH_CONFIG_HOME_EXPORT}" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
 
   echo -e "$INFO Adding ${GREEN}${BASH_CONFIG_HOME_EXPORT}${END} export to ${RESOURCE_PATH[BASHRC_DST]}"
-  EXPORT_STMT="${BASH_CONFIG_HOME_EXPORT}=\"${RESOURCE_PATH[BASH_CONFIG_SRC]}"
+  # Fixed: Added closing quote here
+  EXPORT_STMT="${BASH_CONFIG_HOME_EXPORT}=\"${RESOURCE_PATH[BASH_CONFIG_SRC]}\""
 
   {
-   echo 
+   echo
    echo "# Path to bash resource home directory"
-   echo "${EXPORT_CMD}"
+   # Fixed: Was referencing undefined EXPORT_CMD. Changed to EXPORT_STMT
+   echo "${EXPORT_STMT}"
 
-  } >> "${RESOURCE_PATH[BASHRC_DST]}"
+  } >>"${RESOURCE_PATH[BASHRC_DST]}"
 
  fi
+
+ ######################################
 
  declare -A BASH_CONFIG_MAPPER
 
@@ -229,45 +244,22 @@ configure_bash() {
 
   link_resource "${RESOURCE_FILE}" "${RESOURCE_DST}"
 
-  echo -e "$INFO Sourcing script ${BLUE}${RESOURCE_DST}${END}"
-  source "${RESOURCE_DST}"
-
- done
-
- echo "Completed linking bash resources"
- echo
-
- echo -e "Creating ${YELLOW}source${END} and ${YELLOW}export${END} entries in users .bashrc"
-
- for FILE in "${!BASH_CONFIG_MAPPER[@]}"; do
-
-  # Using the existing var path and building upon it
-  TRANSLATION="${BASH_CONFIG_MAPPER[$FILE]}"
-  BASH_CONFIG_FILE='${BASH_CONFIG_HOME_EXPORT}/${TRANSLATION}'
-
-  if ! grep "source ${BASH_CONFIG_FILE}" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
-
-   echo -e "$INFO ${GRAY}Adding source entry${END} ${YELLOW} ${BASH_CONFIG_FILE} ${END} ${GRAY}to bashrc${END}"
-
+  # Fixed: Replaced undefined $BASH_CONFIG_FILE with $RESOURCE_DST
+  # if the source statement isn't present in users bashrc then add it
+  if ! grep "source ${RESOURCE_DST}" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
+   echo -e "$INFO ${GRAY}Adding source entry${END} ${YELLOW} ${RESOURCE_DST} ${END} ${GRAY}to bashrc${END}"
    {
-    echo "# path to dev defined reource $file"
-    echo "source ${BASH_CONFIG_FILE}"
+    echo "# path to dev defined reource $RESOURCE_DST"
+    # Fixed: Changed from "$HOME/$FILE" to $RESOURCE_DST to get the correct dotfile name (.bash_aliases vs aliases)
+    echo "source ${RESOURCE_DST}"
 
-   } >> "${RESOURCE_PATH[BASHRC_DST]}"
+   } >>"${RESOURCE_PATH[BASHRC_DST]}"
 
+   echo -e "$INFO Sourcing script ${BLUE}${RESOURCE_DST}${END}"
+   source "${RESOURCE_DST}"
   fi
+
  done
-
- if [[ ! -f "${RESOURCE_PATH[PKG_SCRIPT]}" ]]; then
-  echo -e "$ERROR Resource '${YELLOW}${RESOURCE_PATH[PKG_SCRIPT]}${END}' was missing. Terminating..."
-  exit 1
- else
-  echo -e "$INFO Package script '${BLUE}${RESOURCE_PATH[PKG_SCRIPT]}${END}' found!"
-
-  # Execute the script to install packages
-  ${RESOURCE_PATH["PKG_SCRIPT"]}
-
- fi
 }
 
 # ==========================================
@@ -282,6 +274,7 @@ main() {
  install_resources
 
  configure_bash
+ install_packages
 
  setup_vim
  setup_tmux
