@@ -56,6 +56,7 @@ packages=(
  "tigervnc-standalone-server"
  "pv"
  "git"
+ "lazygit"
  "delta:git-delta"
  "thefuck"
  "shfmt"
