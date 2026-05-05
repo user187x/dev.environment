@@ -164,29 +164,17 @@ export PATH="$PATH:/home/xxx/.lmstudio/bin:$MAVEN_HOME/bin"
 
 export NVM_DIR="$HOME/.config/nvm"
 
-# path to bash resource directory
-BASH_CONFIG_HOME="$HOME/dev-environment/resources/software/bash"
-
-# path to dev defined reource .bash_completions
-source $HOME/.bash_aliases
-# path to dev defined reource .bash_completions
-source $HOME/.bash_functions
-# path to dev defined reource .bash_completions
-source $HOME/.bash_completions
-
 # Path to dev.environment directory
 DEV_HOME="/home/xxx/dev.environment"
-# path to dev defined reource .bash_completions
-source $BASH_CONFIG_HOME/.bash_aliases
-# path to dev defined reource .bash_completions
-source $BASH_CONFIG_HOME/.bash_functions
-# path to dev defined reource .bash_completions
-source $BASH_CONFIG_HOME/.bash_completions
-# path to dev defined reource .bash_completions
-source \462410{BASH_CONFIG_HOME_EXPORT}/.bash_aliases
-# path to dev defined reource .bash_completions
-source \462410{BASH_CONFIG_HOME_EXPORT}/.bash_functions
-# path to dev defined reource .bash_completions
-source \462410{BASH_CONFIG_HOME_EXPORT}/.bash_completions
-# path to dev defined reource .bash_completions
-source ${BASH_CONFIG_HOME_EXPORT}/${TRANSLATION}
+
+# Path to bash resource home directory
+BASH_CONFIG_HOME="/home/xxx/dev.environment/resources/software/bash"
+# path to dev defined reource /home/xxx/.bash_aliases
+source /home/xxx/.bash_aliases
+# path to dev defined reource /home/xxx/.bash_functions
+source /home/xxx/.bash_functions
+# path to dev defined reource /home/xxx/.bash_completions
+source /home/xxx/.bash_completions
+
+# TheFuck alias
+eval $(thefuck --alias)
