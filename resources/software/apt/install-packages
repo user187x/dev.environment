@@ -1,0 +1,235 @@
+#!/bin/bash
+
+# Update repositories
+echo "--- 🔄 Updating Package Lists ---"
+sudo apt update -y && sudo apt upgrade -y
+
+# List of tools (Binary:Package or just Package)
+packages=(
+ "tmux"
+ "vim"
+ "bat"
+ "curl"
+ "wget"
+ "openssl"
+ "btop"
+ "pluma"
+ "gedit"
+ "colordiff"
+ "tty-clock"
+ "java:default-jdk"
+ "visualvm"
+ "lolcat"
+ "build-essential"
+ "netstat:net-tools"
+ "jq"
+ "notify-send:libnotify-bin"
+ "indicator-multiload"
+ "gnome-shell-extension-manager"
+ "dconf-editor"
+ "snapd"
+ "yq"
+ "figlet"
+ "toilet"
+ "qrencode"
+ "python3-segno"
+ "tree"
+ "whiptail"
+ "mpv"
+ "duf"
+ "fzf"
+ "gparted"
+ "chromium:chromium-browser"
+ "inotify-tools"
+ "fastfetch"
+ "flatpak"
+ "gnome-software-plugin-flatpak"
+ "imagemagick"
+ "zenity"
+ "pipx"
+ "npm"
+ "nodejs:node"
+ "tigervnc-common"
+ "tigervnc-viewer"
+ "tigervnc-tools"
+ "tigervnc-standalone-server"
+ "pv"
+ "git"
+ "delta:git-delta"
+ "thefuck"
+ "shfmt"
+ "shellcheck"
+ "yamllint"
+ "expect"
+ "xmllint:libxml2-utils"
+ "jc"
+ "gufw"
+ "ranger"
+ "mc"
+ "cmatrix"
+ "sysvbanner"
+ "xclip"
+ "7zip"
+ "libnss3-tools"
+ "wl-clipboard"
+ "unrar"
+ "util-linux-extra"
+ "gnome-terminal"
+ "p7zip-full"
+ "apache2-utils"
+ "file-roller"
+ "terminator"
+ "ffmpeg"
+ "ffmpegthumbnailer"
+ "htop"
+ "kubecolor"
+ "synaptic"
+)
+
+echo
+echo "--- 📦 Starting APT Package Installation ---"
+
+function install-packages {
+
+ echo ""
+ echo "--- 📦 Starting APT Package Installation ---"
+
+ for item in "${packages[@]}"; do
+  # Split the string by colon into an array called 'parts'
+  IFS=':' read -r -a parts <<<"$item"
+
+  # The first element is always the command/binary to check
+  binary="${parts[0]}"
+
+  # The remaining elements are the package names to try
+  if [[ ${#parts[@]} -eq 1 ]]; then
+   # If there are no colons, the binary name is also the package name
+   pkg_variations=("$binary")
+  else
+   # Slice the array to get everything after the first element
+   pkg_variations=("${parts[@]:1}")
+  fi
+
+  # 1. Check if binary already exists
+  if ! command -v "$binary" >/dev/null 2>&1; then
+   echo "Installing $binary..."
+   success=false
+
+   # 2. Loop through each package variation and try to install it
+   for pkg in "${pkg_variations[@]}"; do
+    if sudo apt install "$pkg" -y; then
+     echo -e "Tool [\e[1;92m$binary\e[0m] Installed (via '$pkg')"
+     installed+=("$binary")
+     success=true
+     break # Exit the inner loop on success
+    else
+     echo -e "⚠️ Attempt to install via [\e[1;93m$pkg\e[0m] failed. Trying next..."
+    fi
+   done
+
+   # 3. If the loop finished and success is still false, it failed completely
+   if [ "$success" = false ]; then
+    echo -e "Tool [\e[1;91m$binary\e[0m] failed to install completely."
+    failed+=("$binary")
+   fi
+  else
+   echo -e "Tool [\e[1;92m$binary\e[0m] already installed"
+   installed+=("$binary")
+  fi
+ done
+}
+
+function cache-packages {
+
+ # Define the target cache directory
+ local target_dir="${XDG_CACHE_DIR:-$HOME/.cache}/apt-package-backups"
+
+ # 📁 Ensuring cache directory exists
+ mkdir -p "$target_dir"
+
+ # Change into the target directory so apt-get downloads the files directly here
+ pushd "$target_dir" >/dev/null || {
+  echo "Failed to access cache directory"
+  return 1
+ }
+
+ echo
+ echo "Caching packages..."
+
+ for item in "${packages[@]}"; do
+  # Split the string by colon to handle fallbacks
+  IFS=':' read -r -a parts <<<"$item"
+
+  if [[ ${#parts[@]} -eq 1 ]]; then
+   pkg_variations=("${parts[0]}")
+  else
+   # If there are colons, skip the binary name (index 0) and use the package names
+   pkg_variations=("${parts[@]:1}")
+  fi
+
+  local success=false
+
+  # Try downloading the package (and any fallbacks)
+  for pkg in "${pkg_variations[@]}"; do
+   # 'apt-get download' fetches the .deb into the current working directory
+   if apt-get download "$pkg" >/dev/null 2>&1; then
+    echo -e "✅ Cached: [\e[1;92m$pkg\e[0m]"
+    success=true
+    break # Move on to the next item in the main packages array once successful
+   else
+    echo -e "⚠️ Attempt to cache [\e[1;93m$pkg\e[0m] failed."
+   fi
+  done
+
+  if [ "$success" = false ]; then
+   echo -e "❌ \e[1;91mFailed completely to cache:\e[0m $item"
+  fi
+ done
+
+ # Return to the original directory
+ popd >/dev/null
+ echo "🏁 Caching Complete"
+}
+
+function install-cached {
+
+ # Accept an argument for the path, or default to the standard cache location
+ local cache_dir="${1:-${XDG_CACHE_DIR:-$HOME/.cache}/apt-package-backups}"
+
+ echo "📂 Checking for cached packages in: $cache_dir"
+
+ # 1. Verify the directory actually exists
+ if [[ ! -d "$cache_dir" ]]; then
+  echo -e "❌ \e[1;91mError:\e[0m Cache directory does not exist."
+  return 1
+ fi
+
+ # We use nullglob so if no files match, the array is empty instead of containing a literal "*.deb" string
+ shopt -s nullglob
+ local deb_files=("$cache_dir"/*.deb)
+ shopt -u nullglob # Turn nullglob back off to avoid messing with other script functions
+
+ # 3. Check if we actually found anything
+ if [[ ${#deb_files[@]} -eq 0 ]]; then
+  echo -e "⚠️ \e[1;93mNo .deb files found in the cache directory.\e[0m"
+  return 0
+ fi
+
+ echo "📦 Found ${#deb_files[@]} package(s). Starting bulk installation..."
+
+ # apt will attempt to fetch any missing dependencies automatically.
+ if sudo apt install -y "${deb_files[@]}"; then
+  echo -e "✅ \e[1;92mSuccessfully installed cached packages!\e[0m"
+  return 0
+ else
+  echo -e "❌ \e[1;91mErrors occurred during installation.\e[0m"
+  echo "   (If offline, this usually means a required dependency wasn't cached)."
+  return 1
+ fi
+}
+
+# install packages to system
+install-packages
+
+# cache packages locally
+cache-packages
