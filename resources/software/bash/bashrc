@@ -173,3 +173,20 @@ source $HOME/.bash_aliases
 source $HOME/.bash_functions
 # path to dev defined reource .bash_completions
 source $HOME/.bash_completions
+
+# Path to dev.environment directory
+DEV_HOME="/home/xxx/dev.environment"
+# path to dev defined reource .bash_completions
+source $BASH_CONFIG_HOME/.bash_aliases
+# path to dev defined reource .bash_completions
+source $BASH_CONFIG_HOME/.bash_functions
+# path to dev defined reource .bash_completions
+source $BASH_CONFIG_HOME/.bash_completions
+# path to dev defined reource .bash_completions
+source \462410{BASH_CONFIG_HOME_EXPORT}/.bash_aliases
+# path to dev defined reource .bash_completions
+source \462410{BASH_CONFIG_HOME_EXPORT}/.bash_functions
+# path to dev defined reource .bash_completions
+source \462410{BASH_CONFIG_HOME_EXPORT}/.bash_completions
+# path to dev defined reource .bash_completions
+source ${BASH_CONFIG_HOME_EXPORT}/${TRANSLATION}

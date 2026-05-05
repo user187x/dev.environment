@@ -242,11 +242,12 @@ configure_bash() {
  for FILE in "${!BASH_CONFIG_MAPPER[@]}"; do
 
   # Using the existing var path and building upon it
-  BASH_CONFIG_FILE="\$${BASH_CONFIG_HOME_EXPORT}/${BASH_CONFIG_MAPPER[$FILE]}"
+  TRANSLATION="${BASH_CONFIG_MAPPER[$FILE]}"
+  BASH_CONFIG_FILE='${BASH_CONFIG_HOME_EXPORT}/${TRANSLATION}'
 
   if ! grep "source ${BASH_CONFIG_FILE}" "${RESOURCE_PATH[BASHRC_DST]}" >/dev/null 2>&1; then
 
-   echo -e "$INFO ${GRAY}Adding source entry${END} ${YELLOW}$BASH_CONFIG_FILE${END} ${GRAY}to bashrc${END}"
+   echo -e "$INFO ${GRAY}Adding source entry${END} ${YELLOW} ${BASH_CONFIG_FILE} ${END} ${GRAY}to bashrc${END}"
 
    {
     echo "# path to dev defined reource $file"

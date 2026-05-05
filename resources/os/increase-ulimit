@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# 1. Ensure the script is run as root
+if [ "$EUID" -ne 0 ]; then
+ echo "Error: Please run this script with sudo."
+ exit 1
+fi
+
+FILE="/etc/security/limits.conf"
+SOFT_LIMIT="* soft nofile 10000"
+HARD_LIMIT="* hard nofile 10000"
+
+echo "Updating file descriptor limits in $FILE..."
+
+# 2. Safely append the soft limit if it isn't already there
+if grep -qF "$SOFT_LIMIT" "$FILE"; then
+ echo " -> Soft limit already exists. Skipping."
+else
+ echo "$SOFT_LIMIT" >>"$FILE"
+ echo " -> Added soft limit."
+fi
+
+# 3. Safely append the hard limit if it isn't already there
+if grep -qF "$HARD_LIMIT" "$FILE"; then
+ echo " -> Hard limit already exists. Skipping."
+else
+ echo "$HARD_LIMIT" >>"$FILE"
+ echo " -> Added hard limit."
+fi
+
+echo "Done! You must completely log out and log back in (or reboot) for changes to take effect."
