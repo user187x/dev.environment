@@ -14,15 +14,6 @@ else
   echo "Detected APT package manager (Debian/Ubuntu)..."
   sudo apt-get update
   sudo apt-get install -y thefuck
- elif command -v pacman &>/dev/null; then
-  echo "Detected Pacman package manager (Arch Linux)..."
-  sudo pacman -S --noconfirm thefuck
- elif command -v dnf &>/dev/null; then
-  echo "Detected DNF package manager (Fedora/RHEL)..."
-  sudo dnf install -y thefuck
- elif command -v brew &>/dev/null; then
-  echo "Detected Homebrew..."
-  brew install thefuck
  elif command -v pip3 &>/dev/null; then
   echo "Package manager not detected or not supported. Falling back to pip3..."
   pip3 install --user thefuck
@@ -53,10 +44,13 @@ add_alias_to_shell() {
 
 # Add to bash and zsh configurations
 add_alias_to_shell "$HOME/.bashrc"
-add_alias_to_shell "$HOME/.zshrc"
 
 echo ""
 echo "🎉 Installation and configuration complete!"
 echo "⚠️  To start using 'thefuck', you must reload your shell."
-echo "Run the following command for bash:"
-echo "    source ~/.bashrc"
+echo "Run the following command: source ~/.bashrc"
+
+echo "How to use..."
+echo "Fat-finger a command (ie.): git brnhc"
+echo "Immediately after fubar type: fuck"
+echo "Output: git branch [enter/↑/↓/ctrl+c]"
