@@ -27,13 +27,13 @@ set -Eeuo pipefail
 
 # ─── Locate ourselves ────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 export SCRIPT_DIR
 export LIB_DIR="${LIB_DIR:-$SCRIPT_DIR/lib}"
 export MANIFESTS_DIR="${MANIFESTS_DIR:-$SCRIPT_DIR/manifests}"
 
-# Air-gap: the filebrowser binary lives next to this script by default.
 # Override with --filebrowser-binary or FILEBROWSER_BINARY=/path/to/filebrowser.
-export FILEBROWSER_BINARY="${FILEBROWSER_BINARY:-$SCRIPT_DIR/filebrowser}"
+export FILEBROWSER_BINARY="${FILEBROWSER_BINARY:-$SCRIPT_DIR/addons/filebrowser}"
 
 [[ -d "$LIB_DIR" ]]       || { echo "lib dir not found: $LIB_DIR"        >&2; exit 1; }
 [[ -d "$MANIFESTS_DIR" ]] || { echo "manifests dir not found: $MANIFESTS_DIR" >&2; exit 1; }
