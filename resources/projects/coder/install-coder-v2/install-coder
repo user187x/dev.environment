@@ -291,9 +291,16 @@ apply_secrets() {
 
  if ! kubectl get secret coder-pg-credentials -n "$NAMESPACE" >/dev/null 2>&1; then
   local pwd
+
+  usr="coder"
   pwd="$(openssl rand -hex 24)"
+
+  echo "Postgress Credentials"
+  echo "User     :   $usr"
+  echo "Password :   $pwd"
+
   kubectl create secret generic coder-pg-credentials -n "$NAMESPACE" \
-   --from-literal=username=coder \
+   --from-literal=username="$usr" \
    --from-literal=password="$pwd" \
    --from-literal=database=coder >/dev/null
   ok "Generated random Postgres credentials"
@@ -682,7 +689,7 @@ create_admin() {
   log "Creating admin account..."
 
   ADMIN_USER="admin"
-  ADMIN_EMAIL="admin@$DOMAIN"
+  ADMIN_EMAIL="${ADMIN_USER}@${DOMAIN}"
   ADMIN_PASSWORD="Changeit1!"
   
   local tmp_log
